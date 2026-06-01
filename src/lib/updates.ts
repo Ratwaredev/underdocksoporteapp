@@ -12,7 +12,7 @@ export async function checkForUpdates(): Promise<UpdateResult> {
   if (!isTauriRuntime()) {
     return {
       status: 'unconfigured',
-      currentVersion: '0.1.2-dev',
+      currentVersion: '0.1.3-dev',
       notes: 'Modo navegador: el updater real funciona dentro del build Tauri.'
     };
   }
@@ -31,14 +31,51 @@ export async function checkForUpdates(): Promise<UpdateResult> {
 
     return {
       status: 'current',
-      currentVersion: '0.1.2',
+      currentVersion: '0.1.3',
       notes: 'La app está actualizada.'
     };
   } catch (error) {
     return {
       status: 'error',
-      currentVersion: '0.1.2',
+      currentVersion: '0.1.3',
       notes: error instanceof Error ? error.message : 'No se pudo comprobar actualizaciones.'
+    };
+  }
+}
+
+export async function installLatestUpdate(): Promise<UpdateResult> {
+  if (!isTauriRuntime()) {
+    return {
+      status: 'unconfigured',
+      currentVersion: '0.1.3-dev',
+      notes: 'Modo navegador: el updater real funciona dentro del build Tauri.'
+    };
+  }
+
+  try {
+    const update = await check();
+
+    if (!update) {
+      return {
+        status: 'current',
+        currentVersion: '0.1.3',
+        notes: 'La app ya estaba actualizada.'
+      };
+    }
+
+    await update.downloadAndInstall();
+
+    return {
+      status: 'available',
+      currentVersion: update.currentVersion,
+      nextVersion: update.version,
+      notes: update.body || 'Actualizacion instalada. Reiniciando...'
+    };
+  } catch (error) {
+    return {
+      status: 'error',
+      currentVersion: '0.1.3',
+      notes: error instanceof Error ? error.message : 'No se pudo instalar la actualizacion.'
     };
   }
 }

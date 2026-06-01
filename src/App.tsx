@@ -28,7 +28,7 @@ import type {
 } from './lib/domain';
 import { APP_VERSION, STORAGE_KEYS } from './lib/domain';
 import { DiagnosticReport, runQuickDiagnostic } from './lib/diagnostics';
-import { checkForUpdates as checkNativeUpdates } from './lib/updates';
+import { checkForUpdates as checkNativeUpdates, installLatestUpdate as installNativeUpdate } from './lib/updates';
 import { openRemoteTool, RemoteSession } from './lib/support';
 import { AgentActionResult, AgentStatus, getAgentStatus, runAgentAction } from './lib/agent';
 
@@ -153,6 +153,19 @@ function App() {
     };
 
     void restoreSession();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      const result = await checkNativeUpdates();
+      if (alive) setUpdateResult(result);
+    })();
 
     return () => {
       alive = false;
@@ -432,6 +445,19 @@ function App() {
     }
   }
 
+  async function handleNativeUpdateInstall() {
+    setIsBusy(true);
+    try {
+      const result = await installNativeUpdate();
+      setUpdateResult(result);
+      notify(result.notes, result.status === 'available' ? 'warn' : 'ok');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'No se pudo instalar la actualizacion.', 'danger');
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   async function handleAgentAction(actionId: string) {
     setIsBusy(true);
     try {
@@ -508,6 +534,16 @@ function App() {
         </header>
 
         <section className="auth-shell">
+          {updateResult?.status === 'available' && (
+            <section className="line-panel auth-update-banner">
+              <p className="section-kicker">UPDATE</p>
+              <h3>Nueva version disponible: {updateResult.nextVersion}</h3>
+              <p>{updateResult.notes}</p>
+              <button className="gold-action full" onClick={handleNativeUpdateInstall} disabled={isBusy}>
+                <ArrowDownToLine size={14} /> Actualizar ahora
+              </button>
+            </section>
+          )}
           <section className="line-panel auth-card auth-card-single">
             <p className="section-kicker">ACCESO CLIENTE</p>
             <h2>Entrar con tu codigo de activacion</h2>
