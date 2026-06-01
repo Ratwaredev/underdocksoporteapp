@@ -575,12 +575,12 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
     },
     async registerClient(input) {
       const result = await rpc<{ device: DeviceRecord; session: AppSession }>('register_device', {
-        pairing_code: input.pairingCode,
-        device_name: input.deviceName,
-        computer_name: input.computerName,
-        user_name: input.userName,
-        os: input.os,
-        platform: input.platform
+        p_pairing_code: input.pairingCode,
+        p_device_name: input.deviceName,
+        p_computer_name: input.computerName,
+        p_user_name: input.userName,
+        p_os: input.os,
+        p_platform: input.platform
       });
 
       const device = result.device;
@@ -613,29 +613,29 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
       return { profile, devices, tickets, diagnostics, releases, pairingCodes };
     },
     async getClientDashboard(deviceToken) {
-      const result = await rpc<ClientDashboard>('get_client_dashboard', { device_token: deviceToken });
+      const result = await rpc<ClientDashboard>('get_client_dashboard', { p_device_token: deviceToken });
       return result;
     },
     async createTicket(input, deviceToken) {
       const result = await rpc<TicketRecord>('create_ticket', {
-        device_token: deviceToken,
-        issue: input.issue,
-        client_name: input.clientName,
-        priority: input.priority
+        p_device_token: deviceToken,
+        p_issue: input.issue,
+        p_client_name: input.clientName,
+        p_priority: input.priority
       });
       return Array.isArray(result) ? result[0] : result;
     },
     async saveDiagnostic(input, deviceToken) {
       const result = await rpc<DiagnosticRecord>('save_diagnostic', {
-        device_token: deviceToken,
-        diagnostic: input.payload
+        p_device_token: deviceToken,
+        p_diagnostic: input.payload
       });
       return Array.isArray(result) ? result[0] : result;
     },
     async createRemoteSession(input, deviceToken) {
       const result = await rpc<SessionRecord>('create_remote_session', {
-        device_token: deviceToken,
-        ticket_id: input.ticketId
+        p_device_token: deviceToken,
+        p_ticket_id: input.ticketId
       });
       return Array.isArray(result) ? result[0] : result;
     },
