@@ -54,7 +54,6 @@ function App() {
   const [adminEmail, setAdminEmail] = useState(backendConfig.localAdminEmail);
   const [adminPassword, setAdminPassword] = useState(backendConfig.localAdminPassword);
   const [clientPairingCode, setClientPairingCode] = useState(backendConfig.backendKind === 'local' ? 'DEMO-PAIR' : '');
-  const [clientDeviceName, setClientDeviceName] = useState('Laptop de soporte');
   const [clientIssue, setClientIssue] = useState('Mi PC esta lenta y necesito soporte remoto.');
 
   const [adminDashboard, setAdminDashboard] = useState<AdminDashboard | null>(null);
@@ -296,9 +295,10 @@ function App() {
     try {
       const report = await runQuickDiagnostic();
       setDiagnostic(report);
+      const deviceName = report.computerName || report.userName || 'Equipo cliente';
       const result = await appBackend.registerClient({
         pairingCode: clientPairingCode,
-        deviceName: clientDeviceName,
+        deviceName,
         issue: clientIssue,
         computerName: report.computerName,
         userName: report.userName,
@@ -446,13 +446,24 @@ function App() {
   }
 
   async function handleRefreshDashboard() {
-    if (session?.role === 'admin') {
-      await refreshAdmin();
+    if (!session) {
+      notify('No hay una sesion activa para sincronizar.', 'warn');
       return;
     }
 
-    if (session?.deviceToken) {
-      await refreshClient(session.deviceToken);
+    setIsBusy(true);
+    try {
+      if (session.role === 'admin') {
+        await refreshAdmin();
+      } else if (session.deviceToken) {
+        await refreshClient(session.deviceToken);
+      }
+
+      notify('Panel sincronizado.', 'ok');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'No se pudo sincronizar el panel.', 'danger');
+    } finally {
+      setIsBusy(false);
     }
   }
 
@@ -499,27 +510,23 @@ function App() {
         <section className="auth-shell">
           <section className="line-panel auth-card auth-card-single">
             <p className="section-kicker">ACCESO CLIENTE</p>
-            <h2>Entrar con tu codigo</h2>
+            <h2>Entrar con tu codigo de activacion</h2>
             <div className="field-stack">
               <label>
-                <span>Codigo</span>
+                <span>Codigo de activacion</span>
                 <input
                   value={clientPairingCode}
                   onChange={(event) => setClientPairingCode(event.target.value.toUpperCase())}
-                  placeholder={backendConfig.backendKind === 'local' ? 'DEMO-PAIR' : 'Codigo que te dio soporte'}
+                  placeholder={backendConfig.backendKind === 'local' ? 'DEMO-PAIR' : 'Codigo de activacion'}
                   autoComplete="one-time-code"
                 />
-              </label>
-              <label>
-                <span>Nombre del equipo</span>
-                <input value={clientDeviceName} onChange={(event) => setClientDeviceName(event.target.value)} placeholder="Notebook de Juan" />
               </label>
             </div>
             <button className="gold-action full" onClick={handleClientRegister} disabled={isBusy}>
               <MonitorCog size={14} /> Entrar
             </button>
             <div className="mini-notes auth-footnote">
-              <p>Sin cuenta. Solo el codigo que te pasa soporte.</p>
+              <p>Sin cuenta. Solo el codigo de activacion que te pasa soporte.</p>
               <button className="text-link" onClick={() => setShowAdminLogin(true)}>
                 Acceso admin
               </button>

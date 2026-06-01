@@ -12,7 +12,7 @@ export async function checkForUpdates(): Promise<UpdateResult> {
   if (!isTauriRuntime()) {
     return {
       status: 'unconfigured',
-      currentVersion: '0.1.0-dev',
+      currentVersion: '0.1.1-dev',
       notes: 'Modo navegador: el updater real funciona dentro del build Tauri.'
     };
   }
@@ -31,13 +31,13 @@ export async function checkForUpdates(): Promise<UpdateResult> {
 
     return {
       status: 'current',
-      currentVersion: '0.1.0',
+      currentVersion: '0.1.1',
       notes: 'La app está actualizada.'
     };
   } catch (error) {
     return {
       status: 'error',
-      currentVersion: '0.1.0',
+      currentVersion: '0.1.1',
       notes: error instanceof Error ? error.message : 'No se pudo comprobar actualizaciones.'
     };
   }

@@ -4,13 +4,13 @@ UnderDock is a desktop support deck built with Tauri + React + TypeScript.
 
 It now supports two modes:
 
-- `Client`: register a machine, run on-demand diagnostics, create tickets, and open remote support.
-- `Admin`: sign in, see the central queue, generate pairing codes, change ticket status, and check releases.
+- `Client`: enter an activation code, register the machine, run on-demand diagnostics, create tickets, and open remote support.
+- `Admin`: sign in, see the central queue, generate activation codes, change ticket status, and check releases.
 
 ## What is working
 
 - Windows diagnostic on demand through Tauri + PowerShell/WMI.
-- Local demo backend with persisted tickets, devices, pairing codes, and releases.
+- Local demo backend with persisted tickets, devices, activation codes, and releases.
 - Supabase-compatible backend path for real sync across machines.
 - RustDesk integration for remote support.
 - Update feed checking from the backend/release table.
@@ -29,7 +29,7 @@ It now supports two modes:
 If you do not set Supabase env vars, the app runs in local demo mode.
 
 - Admin login defaults to `admin@underdock.local` / `admin123`.
-- Client pairing code defaults to `DEMO-PAIR`.
+- Client activation code defaults to `DEMO-PAIR`.
 - Data stays in the current browser profile.
 
 ## Supabase setup
@@ -72,19 +72,19 @@ npm run tauri:build
 In PowerShell:
 
 ```powershell
-# This repo's `tauri.conf.json` is wired to the public key from
-# `$env:USERPROFILE\.tauri\underdock.key.pub`, so use the matching private key.
-$env:TAURI_SIGNING_PRIVATE_KEY = "$env:USERPROFILE\.tauri\underdock.key"
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "your-key-password"
+# Use the release signing key generated for this repo.
+# The private key is password-protected, so set both env vars before building.
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content -Raw "$env:USERPROFILE\.tauri\underdock-release.key"
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = Get-Content -Raw "$env:USERPROFILE\.tauri\underdock-release.pass"
 npm run tauri:build
 ```
 
 After the build finishes, upload these files from `src-tauri/target/release/bundle/` to GitHub Releases:
 
-- `UnderDock Command UI_0.1.0_x64-setup.exe` or `UnderDock Command UI_0.1.0_x64_en-US.msi`
+- `UnderDock Command UI_0.1.1_x64-setup.exe` or `UnderDock Command UI_0.1.1_x64_en-US.msi`
 - the matching `.sig`
 - `latest.json`
 
 The `latest.json` file must contain the version, notes, pub_date, and a `platforms.windows-x86_64` entry with the release URL and signature content.
 
-If you want to use a different key instead, regenerate the private/public pair and update `plugins.updater.pubkey` in `src-tauri/tauri.conf.json` to match the new `.pub` file. If the private key was generated without a password, set `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to an empty string, or press Enter at the prompt.
+If you want to use a different key instead, regenerate the private/public pair and update `plugins.updater.pubkey` in `src-tauri/tauri.conf.json` to match the new `.pub` file. Keep the private key password out of the repo and load it from a local file or secret store when building.

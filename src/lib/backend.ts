@@ -263,7 +263,7 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
     async registerClient(input) {
       const state = getState();
       const code = state.pairingCodes.find((item) => item.code.toUpperCase() === input.pairingCode.toUpperCase() && !item.claimedAt);
-      if (!code) throw new Error('Codigo de pairing invalido o vencido.');
+      if (!code) throw new Error('Codigo de activacion invalido o vencido.');
 
       const createdAt = nowIso();
       const device: DeviceRecord = {
@@ -566,7 +566,7 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
     async generatePairingCode() {
       const session = readSession();
       if (!session?.accessToken) {
-        throw new Error('Necesitas iniciar sesion como admin para generar pairing codes.');
+        throw new Error('Necesitas iniciar sesion como admin para generar codigos de activacion.');
       }
 
       const result = await rpc<PairingCodeRecord>('generate_pairing_code', {}, session.accessToken);
