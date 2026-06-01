@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "UnderDock Command UI",
+  "version": "0.1.0",
+  "identifier": "dev.ratware.underdock",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "UnderDock Command UI",
+        "width": 1440,
+        "height": 820,
+        "minWidth": 1100,
+        "minHeight": 720,
+        "resizable": true,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis",
+      "msi"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://updates.example.com/underdock/{{target}}/{{arch}}/{{current_version}}"
+      ],
+      "pubkey": "dGVzdF9wdWJsaWNfa2V5X3JlcGxhY2VfbWUK"
+    }
+  }
+}

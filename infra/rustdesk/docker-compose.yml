@@ -1,0 +1,28 @@
+# RustDesk OSS self-host base for UnderDock.
+# Esto no se ejecuta desde la app; es la infra que después usás para tener relay/ID propio.
+# Producción: configurar firewall, dominio, TLS/reverse proxy y claves propias.
+
+services:
+  hbbs:
+    image: rustdesk/rustdesk-server:latest
+    container_name: underdock-rustdesk-hbbs
+    command: hbbs -r hbbr:21117
+    volumes:
+      - ./data:/data
+    ports:
+      - "21115:21115"
+      - "21116:21116"
+      - "21116:21116/udp"
+      - "21118:21118"
+    restart: unless-stopped
+
+  hbbr:
+    image: rustdesk/rustdesk-server:latest
+    container_name: underdock-rustdesk-hbbr
+    command: hbbr
+    volumes:
+      - ./data:/data
+    ports:
+      - "21117:21117"
+      - "21119:21119"
+    restart: unless-stopped

@@ -1,0 +1,11 @@
+{
+  "version": "0.1.1",
+  "notes": "Primer update de prueba: mejoras visuales, reporte exportable y correcciones menores.",
+  "pub_date": "2026-06-01T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "REPLACE_WITH_GENERATED_SIGNATURE",
+      "url": "https://updates.example.com/underdock/UnderDock_0.1.1_x64-setup.exe"
+    }
+  }
+}

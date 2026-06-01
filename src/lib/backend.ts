@@ -1,0 +1,710 @@
+import type {
+  AdminDashboard,
+  AdminProfile,
+  AppSession,
+  BackendKind,
+  ClientBootstrap,
+  ClientDashboard,
+  CreateSessionInput,
+  CreateTicketInput,
+  DeviceRecord,
+  DiagnosticRecord,
+  PairingCodeRecord,
+  ReleaseRecord,
+  RegisterClientInput,
+  RuntimeConfig,
+  SaveDiagnosticInput,
+  SessionRecord,
+  SignInResult,
+  TicketRecord,
+  TicketStatus,
+  UpdateResult
+} from './domain';
+import {
+  DEFAULT_REMOTE_INSTRUCTIONS,
+  STORAGE_KEYS,
+  compareVersions,
+  createId,
+  createPairingCode,
+  createSessionCode,
+  nowIso
+} from './domain';
+
+type LocalState = {
+  profile: AdminProfile;
+  devices: DeviceRecord[];
+  tickets: TicketRecord[];
+  diagnostics: DiagnosticRecord[];
+  sessions: SessionRecord[];
+  releases: ReleaseRecord[];
+  pairingCodes: PairingCodeRecord[];
+};
+
+type StoredSession = AppSession | null;
+
+type BackendBase = {
+  kind: BackendKind;
+  configured: boolean;
+  description: string;
+  bootstrap(): Promise<StoredSession>;
+  signInAdmin(email: string, password: string): Promise<SignInResult>;
+  signOut(): Promise<void>;
+  generatePairingCode(): Promise<PairingCodeRecord>;
+  registerClient(input: RegisterClientInput): Promise<ClientBootstrap>;
+  getAdminDashboard(): Promise<AdminDashboard>;
+  getClientDashboard(deviceToken: string): Promise<ClientDashboard>;
+  createTicket(input: CreateTicketInput, deviceToken: string): Promise<TicketRecord>;
+  saveDiagnostic(input: SaveDiagnosticInput, deviceToken: string): Promise<DiagnosticRecord>;
+  createRemoteSession(input: CreateSessionInput, deviceToken: string): Promise<SessionRecord>;
+  updateTicketStatus(ticketId: string, status: TicketStatus): Promise<TicketRecord>;
+  listReleases(): Promise<ReleaseRecord[]>;
+  checkForUpdates(currentVersion: string): Promise<UpdateResult>;
+};
+
+function readSession(): StoredSession {
+  if (typeof window === 'undefined') return null;
+
+  const raw = window.localStorage.getItem(STORAGE_KEYS.session);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as StoredSession;
+  } catch {
+    return null;
+  }
+}
+
+function writeSession(session: StoredSession) {
+  if (typeof window === 'undefined') return;
+  if (!session) {
+    window.localStorage.removeItem(STORAGE_KEYS.session);
+    return;
+  }
+
+  window.localStorage.setItem(STORAGE_KEYS.session, JSON.stringify(session));
+}
+
+function readLocalState(): LocalState {
+  if (typeof window === 'undefined') return createSeedState();
+
+  const raw = window.localStorage.getItem(STORAGE_KEYS.localState);
+  if (!raw) {
+    const seed = createSeedState();
+    window.localStorage.setItem(STORAGE_KEYS.localState, JSON.stringify(seed));
+    return seed;
+  }
+
+  try {
+    return JSON.parse(raw) as LocalState;
+  } catch {
+    const seed = createSeedState();
+    window.localStorage.setItem(STORAGE_KEYS.localState, JSON.stringify(seed));
+    return seed;
+  }
+}
+
+function writeLocalState(state: LocalState) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(STORAGE_KEYS.localState, JSON.stringify(state));
+}
+
+function createSeedState(): LocalState {
+  const orgName = 'UnderDock Demo';
+  const deviceId = createId('dev_');
+  const pairingCode = 'DEMO-PAIR';
+  const deviceToken = createId('tok_');
+  const releaseBase = nowIso();
+
+  return {
+    profile: {
+      userId: 'local-admin',
+      email: 'admin@underdock.local',
+      orgName,
+      role: 'admin'
+    },
+    devices: [
+      {
+        id: deviceId,
+        orgName,
+        displayName: 'Equipo demo',
+        computerName: 'DEMO-PC',
+        userName: 'usuario-demo',
+        os: 'Windows 11 Pro 24H2',
+        platform: 'windows',
+        pairingCode,
+        deviceToken,
+        status: 'idle',
+        lastSeenAt: releaseBase,
+        createdAt: releaseBase,
+        updatedAt: releaseBase
+      }
+    ],
+    tickets: [
+      {
+        id: 'UD-1024',
+        deviceId,
+        clientName: 'Cliente demo',
+        issue: 'La PC tarda mucho en iniciar y se queda al 100% de disco.',
+        status: 'nuevo',
+        priority: 'alta',
+        remoteCode: 'XK3P92',
+        createdAt: releaseBase,
+        updatedAt: releaseBase
+      },
+      {
+        id: 'UD-1023',
+        deviceId,
+        clientName: 'Oficina demo',
+        issue: 'Piden limpieza y chequeo antes de instalar SSD.',
+        status: 'esperando',
+        priority: 'normal',
+        createdAt: releaseBase,
+        updatedAt: releaseBase
+      }
+    ],
+    diagnostics: [],
+    sessions: [],
+    releases: [
+      {
+        id: createId('rel_'),
+        channel: 'stable',
+        version: '0.1.1',
+        notes: 'Release de prueba con sync de tickets, pairing y soporte remoto.',
+        manifestUrl: 'https://updates.example.com/underdock/manifest.json',
+        signature: 'REPLACE_WITH_SIGNATURE',
+        publishedAt: releaseBase,
+        isActive: true
+      }
+    ],
+    pairingCodes: [
+      {
+        code: pairingCode,
+        orgName,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 30).toISOString(),
+        createdAt: releaseBase
+      }
+    ]
+  };
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function getRuntimeConfig(): RuntimeConfig {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() || null;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() || null;
+  const defaultOrgName = import.meta.env.VITE_DEFAULT_ORG_NAME?.trim() || 'UnderDock';
+  const remoteToolUrl = import.meta.env.VITE_REMOTE_TOOL_URL?.trim() || '';
+  const localAdminEmail = import.meta.env.VITE_LOCAL_ADMIN_EMAIL?.trim() || 'admin@underdock.local';
+  const localAdminPassword = import.meta.env.VITE_LOCAL_ADMIN_PASSWORD?.trim() || 'admin123';
+  const localAdminOrg = import.meta.env.VITE_LOCAL_ADMIN_ORG?.trim() || 'UnderDock Demo';
+
+  return {
+    backendKind: supabaseUrl && supabaseAnonKey ? 'supabase' : 'local',
+    supabaseUrl,
+    supabaseAnonKey,
+    defaultOrgName,
+    remoteToolUrl,
+    localAdminEmail,
+    localAdminPassword,
+    localAdminOrg
+  };
+}
+
+function createLocalBackend(config: RuntimeConfig): BackendBase {
+  const getState = () => readLocalState();
+  const setState = (state: LocalState) => writeLocalState(state);
+
+  return {
+    kind: 'local',
+    configured: true,
+    description: 'Modo local demo. Los datos quedan en el navegador de esta maquina.',
+    async bootstrap() {
+      const session = readSession();
+      if (session?.role === 'admin' && session.email) return session;
+      if (session?.role === 'client' && session.deviceToken) return session;
+      return null;
+    },
+    async signInAdmin(email, password) {
+      if (email !== config.localAdminEmail || password !== config.localAdminPassword) {
+        throw new Error('Credenciales invalidas para el panel admin local.');
+      }
+
+      const state = getState();
+      const session: AppSession = {
+        role: 'admin',
+        backendKind: 'local',
+        email,
+        displayName: 'Administrador local',
+        orgName: state.profile.orgName
+      };
+
+      writeSession(session);
+      return { session, profile: state.profile };
+    },
+    async signOut() {
+      writeSession(null);
+    },
+    async generatePairingCode() {
+      const state = getState();
+      const code = createPairingCode();
+      const record: PairingCodeRecord = {
+        code,
+        orgName: state.profile.orgName,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 30).toISOString(),
+        createdAt: nowIso()
+      };
+
+      state.pairingCodes = [record, ...state.pairingCodes].slice(0, 12);
+      setState(state);
+      return record;
+    },
+    async registerClient(input) {
+      const state = getState();
+      const code = state.pairingCodes.find((item) => item.code.toUpperCase() === input.pairingCode.toUpperCase() && !item.claimedAt);
+      if (!code) throw new Error('Codigo de pairing invalido o vencido.');
+
+      const createdAt = nowIso();
+      const device: DeviceRecord = {
+        id: createId('dev_'),
+        orgName: code.orgName,
+        displayName: input.deviceName,
+        computerName: input.computerName,
+        userName: input.userName,
+        os: input.os,
+        platform: input.platform,
+        pairingCode: code.code,
+        deviceToken: createId('tok_'),
+        status: 'waiting',
+        lastSeenAt: createdAt,
+        createdAt,
+        updatedAt: createdAt
+      };
+
+      state.devices = [device, ...state.devices];
+      code.claimedAt = createdAt;
+      code.claimedDeviceId = device.id;
+      state.pairingCodes = [code, ...state.pairingCodes.filter((item) => item.code !== code.code)];
+      setState(state);
+
+      const session: AppSession = {
+        role: 'client',
+        backendKind: 'local',
+        deviceId: device.id,
+        deviceToken: device.deviceToken,
+        displayName: device.displayName,
+        orgName: device.orgName
+      };
+
+      writeSession(session);
+      return { session, device };
+    },
+    async getAdminDashboard() {
+      const state = getState();
+      return clone({
+        profile: state.profile,
+        devices: state.devices,
+        tickets: state.tickets,
+        diagnostics: state.diagnostics,
+        releases: state.releases,
+        pairingCodes: state.pairingCodes
+      });
+    },
+    async getClientDashboard(deviceToken) {
+      const state = getState();
+      const device = state.devices.find((item) => item.deviceToken === deviceToken);
+      if (!device) throw new Error('No se encontro el dispositivo asociado.');
+
+      const tickets = state.tickets.filter((item) => item.deviceId === device.id);
+      const diagnostics = state.diagnostics.filter((item) => item.deviceId === device.id);
+      const latestSession = state.sessions.filter((item) => item.deviceId === device.id)[0] ?? null;
+      const latestRelease = state.releases.filter((item) => item.isActive).sort((left, right) => compareVersions(right.version, left.version))[0] ?? null;
+
+      return clone({
+        device,
+        tickets,
+        diagnostics,
+        latestRelease,
+        latestSession
+      });
+    },
+    async createTicket(input, deviceToken) {
+      const state = getState();
+      const device = state.devices.find((item) => item.deviceToken === deviceToken || item.id === input.deviceId);
+      if (!device) throw new Error('No se encontro el dispositivo para crear el ticket.');
+
+      const ticket: TicketRecord = {
+        id: `UD-${Math.floor(1000 + Math.random() * 8999)}`,
+        deviceId: device.id,
+        clientName: input.clientName,
+        issue: input.issue,
+        status: 'nuevo',
+        priority: input.priority,
+        createdAt: nowIso(),
+        updatedAt: nowIso()
+      };
+
+      state.tickets = [ticket, ...state.tickets];
+      device.status = 'waiting';
+      device.updatedAt = nowIso();
+      setState(state);
+      return clone(ticket);
+    },
+    async saveDiagnostic(input, deviceToken) {
+      const state = getState();
+      const device = state.devices.find((item) => item.deviceToken === deviceToken || item.id === input.deviceId);
+      if (!device) throw new Error('No se encontro el dispositivo para guardar diagnostico.');
+
+      const diagnostic: DiagnosticRecord = {
+        id: createId('diag_'),
+        deviceId: device.id,
+        generatedAt: nowIso(),
+        payload: input.payload
+      };
+
+      state.diagnostics = [diagnostic, ...state.diagnostics];
+      device.lastSeenAt = diagnostic.generatedAt;
+      device.updatedAt = diagnostic.generatedAt;
+      setState(state);
+      return clone(diagnostic);
+    },
+    async createRemoteSession(input, deviceToken) {
+      const state = getState();
+      const device = state.devices.find((item) => item.deviceToken === deviceToken || item.id === input.deviceId);
+      if (!device) throw new Error('No se encontro el dispositivo para la sesion remota.');
+
+      const ticket = state.tickets.find((item) => item.id === input.ticketId);
+      const session: SessionRecord = {
+        id: createId('ses_'),
+        ticketId: input.ticketId,
+        deviceId: device.id,
+        code: createSessionCode(),
+        expiresInMinutes: 20,
+        instructions: DEFAULT_REMOTE_INSTRUCTIONS,
+        createdAt: nowIso()
+      };
+
+      state.sessions = [session, ...state.sessions];
+      if (ticket) {
+        ticket.remoteCode = session.code;
+        ticket.status = 'en-remoto';
+        ticket.updatedAt = nowIso();
+      }
+      device.status = 'en-remoto';
+      device.updatedAt = nowIso();
+      setState(state);
+      return clone(session);
+    },
+    async updateTicketStatus(ticketId, status) {
+      const state = getState();
+      const ticket = state.tickets.find((item) => item.id === ticketId);
+      if (!ticket) throw new Error('No se encontro el ticket.');
+
+      ticket.status = status;
+      ticket.updatedAt = nowIso();
+      setState(state);
+      return clone(ticket);
+    },
+    async listReleases() {
+      const state = getState();
+      return clone(state.releases);
+    },
+    async checkForUpdates(currentVersion) {
+      const releases = await this.listReleases();
+      const active = releases.filter((item) => item.isActive).sort((left, right) => compareVersions(right.version, left.version))[0];
+      if (!active) {
+        return {
+          status: 'unconfigured',
+          currentVersion,
+          notes: 'No hay releases publicadas en el backend local.'
+        };
+      }
+
+      if (compareVersions(active.version, currentVersion) > 0) {
+        return {
+          status: 'available',
+          currentVersion,
+          nextVersion: active.version,
+          notes: active.notes,
+          manifestUrl: active.manifestUrl,
+          signature: active.signature
+        };
+      }
+
+      return {
+        status: 'current',
+        currentVersion,
+        notes: 'La version instalada esta al dia.',
+        manifestUrl: active.manifestUrl,
+        signature: active.signature
+      };
+    }
+  };
+}
+
+function createSupabaseBackend(config: RuntimeConfig): BackendBase {
+  if (!config.supabaseUrl || !config.supabaseAnonKey) {
+    return createLocalBackend(config);
+  }
+
+  const url = config.supabaseUrl.replace(/\/$/, '');
+  const anonKey = config.supabaseAnonKey;
+
+  const makeHeaders = (token?: string) => ({
+    apikey: anonKey,
+    Authorization: `Bearer ${token ?? anonKey}`,
+    'Content-Type': 'application/json',
+    Prefer: 'return=representation'
+  });
+
+  const request = async <T>(path: string, init?: RequestInit, token?: string): Promise<T> => {
+    const response = await fetch(`${url}${path}`, {
+      ...init,
+      headers: {
+        ...makeHeaders(token),
+        ...(init?.headers ?? {})
+      }
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Supabase error ${response.status}`);
+    }
+
+    if (response.status === 204) return null as T;
+    const body = await response.text();
+    return (body ? JSON.parse(body) : null) as T;
+  };
+
+  const restPath = (table: string, params: Record<string, string> = {}) => {
+    const search = new URLSearchParams({ select: '*' });
+    Object.entries(params).forEach(([key, value]) => search.set(key, value));
+    return `/rest/v1/${table}?${search.toString()}`;
+  };
+
+  const rpc = async <T>(name: string, payload: Record<string, unknown>, token?: string) =>
+    request<T>(`/rest/v1/rpc/${name}`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, token);
+
+  const select = async <T>(table: string, params: Record<string, string> = {}, token?: string) =>
+    request<T[]>(restPath(table, params), undefined, token);
+
+  const single = async <T>(table: string, params: Record<string, string> = {}, token?: string) => {
+    const rows = await select<T>(table, { ...params, limit: '1' }, token);
+    return rows[0] ?? null;
+  };
+
+  const bootstrap = async (): Promise<StoredSession> => {
+    const session = readSession();
+    if (!session?.accessToken) return null;
+
+    try {
+      const user = await request<{ id: string; email: string | null; user_metadata?: Record<string, unknown> }>(
+        '/auth/v1/user',
+        { method: 'GET' },
+        session.accessToken
+      );
+
+      if (session.role !== 'admin') return session;
+
+      const profile = await single<AdminProfile>('admin_users', { user_id: `eq.${user.id}` }, session.accessToken);
+      if (!profile) return null;
+      return {
+        role: 'admin',
+        backendKind: 'supabase',
+        userId: user.id,
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        email: profile.email,
+        displayName: profile.orgName,
+        orgName: profile.orgName
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  return {
+    kind: 'supabase',
+    configured: true,
+    description: 'Backend Supabase conectado para tickets, login y realtime.',
+    bootstrap,
+    async signInAdmin(email, password) {
+      const auth = await request<{ access_token: string; refresh_token: string; user: { id: string; email: string } }>(
+        '/auth/v1/token?grant_type=password',
+        {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        }
+      );
+
+      const profile = await single<AdminProfile>('admin_users', { user_id: `eq.${auth.user.id}` }, auth.access_token);
+      if (!profile) {
+        throw new Error('El usuario autenticado no figura como admin en la base.');
+      }
+
+      const session: AppSession = {
+        role: 'admin',
+        backendKind: 'supabase',
+        userId: auth.user.id,
+        accessToken: auth.access_token,
+        refreshToken: auth.refresh_token,
+        email,
+        displayName: profile.orgName,
+        orgName: profile.orgName
+      };
+
+      writeSession(session);
+      return { session, profile };
+    },
+    async signOut() {
+      writeSession(null);
+    },
+    async generatePairingCode() {
+      const session = readSession();
+      if (!session?.accessToken) {
+        throw new Error('Necesitas iniciar sesion como admin para generar pairing codes.');
+      }
+
+      const result = await rpc<PairingCodeRecord>('generate_pairing_code', {}, session.accessToken);
+      const record = Array.isArray(result) ? result[0] : result;
+      return record as PairingCodeRecord;
+    },
+    async registerClient(input) {
+      const result = await rpc<{ device: DeviceRecord; session: AppSession }>('register_device', {
+        pairing_code: input.pairingCode,
+        device_name: input.deviceName,
+        computer_name: input.computerName,
+        user_name: input.userName,
+        os: input.os,
+        platform: input.platform
+      });
+
+      const device = result.device;
+      const session = {
+        ...result.session,
+        backendKind: 'supabase' as const,
+        role: 'client' as const
+      };
+
+      writeSession(session);
+      return { session, device };
+    },
+    async getAdminDashboard() {
+      const session = readSession();
+      if (!session?.accessToken) throw new Error('No hay sesion admin activa.');
+
+      const [profile, devices, tickets, diagnostics, releases, pairingCodes] = await Promise.all([
+        single<AdminProfile>('admin_users', { user_id: `eq.${session.userId ?? ''}` }, session.accessToken),
+        select<DeviceRecord>('devices', { order: 'updated_at.desc' }, session.accessToken),
+        select<TicketRecord>('tickets', { order: 'updated_at.desc' }, session.accessToken),
+        select<DiagnosticRecord>('diagnostics', { order: 'generated_at.desc' }, session.accessToken),
+        select<ReleaseRecord>('releases', { order: 'published_at.desc' }, session.accessToken),
+        select<PairingCodeRecord>('pairing_codes', { order: 'created_at.desc' }, session.accessToken)
+      ]);
+
+      if (!profile) {
+        throw new Error('No se pudo leer el perfil admin.');
+      }
+
+      return { profile, devices, tickets, diagnostics, releases, pairingCodes };
+    },
+    async getClientDashboard(deviceToken) {
+      const result = await rpc<ClientDashboard>('get_client_dashboard', { device_token: deviceToken });
+      return result;
+    },
+    async createTicket(input, deviceToken) {
+      const result = await rpc<TicketRecord>('create_ticket', {
+        device_token: deviceToken,
+        issue: input.issue,
+        client_name: input.clientName,
+        priority: input.priority
+      });
+      return Array.isArray(result) ? result[0] : result;
+    },
+    async saveDiagnostic(input, deviceToken) {
+      const result = await rpc<DiagnosticRecord>('save_diagnostic', {
+        device_token: deviceToken,
+        diagnostic: input.payload
+      });
+      return Array.isArray(result) ? result[0] : result;
+    },
+    async createRemoteSession(input, deviceToken) {
+      const result = await rpc<SessionRecord>('create_remote_session', {
+        device_token: deviceToken,
+        ticket_id: input.ticketId
+      });
+      return Array.isArray(result) ? result[0] : result;
+    },
+    async updateTicketStatus(ticketId, status) {
+      const session = readSession();
+      if (!session?.accessToken) throw new Error('No hay sesion admin activa.');
+
+      const rows = await request<TicketRecord[]>(
+        restPath('tickets', { id: `eq.${ticketId}` }),
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ status, updated_at: nowIso() })
+        },
+        session.accessToken
+      );
+
+      return rows[0];
+    },
+    async listReleases() {
+      return select<ReleaseRecord>('releases', { order: 'published_at.desc' }, anonKey);
+    },
+    async checkForUpdates(currentVersion) {
+      try {
+        const releases = await this.listReleases();
+        const active = releases.filter((item) => item.isActive).sort((left, right) => compareVersions(right.version, left.version))[0];
+
+        if (!active) {
+          return {
+            status: 'unconfigured',
+            currentVersion,
+            notes: 'No hay releases activas en Supabase.'
+          };
+        }
+
+        if (compareVersions(active.version, currentVersion) > 0) {
+          return {
+            status: 'available',
+            currentVersion,
+            nextVersion: active.version,
+            notes: active.notes,
+            manifestUrl: active.manifestUrl,
+            signature: active.signature
+          };
+        }
+
+        return {
+          status: 'current',
+          currentVersion,
+          notes: 'La version instalada esta al dia.',
+          manifestUrl: active.manifestUrl,
+          signature: active.signature
+        };
+      } catch (error) {
+        return {
+          status: 'error',
+          currentVersion,
+          notes: error instanceof Error ? error.message : 'No se pudo consultar updates.'
+        };
+      }
+    }
+  };
+}
+
+export function createBackend() {
+  const config = getRuntimeConfig();
+  return config.backendKind === 'supabase' ? createSupabaseBackend(config) : createLocalBackend(config);
+}
+
+export const backendConfig = getRuntimeConfig();
+export const appBackend = createBackend();
+
+export type { BackendBase as AppBackend };
