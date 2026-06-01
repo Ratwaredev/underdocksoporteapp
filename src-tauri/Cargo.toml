@@ -7,6 +7,7 @@ edition = "2021"
 
 [lib]
 name = "underdock_lib"
+path = "src/lib.rs"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

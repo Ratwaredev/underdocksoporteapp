@@ -1,0 +1,11 @@
+{
+  "version": "0.1.1",
+  "notes": "Release inicial con soporte remoto y diagnósticos térmicos.",
+  "pub_date": "2026-06-01T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "PEGA_AQUI_EL_CONTENIDO_DEL_ARCHIVO_SIG",
+      "url": "https://github.com/Ratwaredev/underdocksoporteapp/releases/download/v0.1.1/underdock-setup.exe"
+    }
+  }
+}

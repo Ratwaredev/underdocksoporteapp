@@ -22,6 +22,7 @@ It now supports two modes:
 3. `.env` values copied from `.env.example`.
 4. A release row in `public.releases`.
 5. A matching remote tool binary or URL.
+6. A real Tauri updater manifest hosted over HTTPS.
 
 ## Local demo mode
 
@@ -56,5 +57,34 @@ npm run tauri:build
 
 - The app is still Windows-first.
 - Remote support uses RustDesk as the default engine.
-- Automatic updater delivery still needs a real hosted manifest and signed release assets.
+- Automatic updater delivery is wired to GitHub Releases, but you still need to publish a real `latest.json` manifest and replace the placeholder updater public key with the key that matches your signed builds.
 
+## Remote update flow
+
+1. Generate a Tauri signing key once.
+2. Build a new Windows release with the signing key in your environment.
+3. Publish the generated installer, its `.sig` file, and `latest.json` to `Ratwaredev/underdocksoporteapp` GitHub Releases.
+4. Keep `public.releases` in Supabase in sync so the admin panel shows the active version.
+5. On the client PC, the updater checks GitHub Releases and installs the available version when the user clicks update.
+
+## Exact update setup
+
+In PowerShell:
+
+```powershell
+# This repo's `tauri.conf.json` is wired to the public key from
+# `$env:USERPROFILE\.tauri\underdock.key.pub`, so use the matching private key.
+$env:TAURI_SIGNING_PRIVATE_KEY = "$env:USERPROFILE\.tauri\underdock.key"
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "your-key-password"
+npm run tauri:build
+```
+
+After the build finishes, upload these files from `src-tauri/target/release/bundle/` to GitHub Releases:
+
+- `UnderDock Command UI_0.1.0_x64-setup.exe` or `UnderDock Command UI_0.1.0_x64_en-US.msi`
+- the matching `.sig`
+- `latest.json`
+
+The `latest.json` file must contain the version, notes, pub_date, and a `platforms.windows-x86_64` entry with the release URL and signature content.
+
+If you want to use a different key instead, regenerate the private/public pair and update `plugins.updater.pubkey` in `src-tauri/tauri.conf.json` to match the new `.pub` file. If the private key was generated without a password, set `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to an empty string, or press Enter at the prompt.

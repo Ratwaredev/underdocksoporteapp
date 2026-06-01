@@ -12,6 +12,7 @@ import {
   MonitorCog,
   RefreshCw,
   ShieldCheck,
+  Thermometer,
   Wifi,
   Wrench
 } from 'lucide-react';
@@ -25,25 +26,30 @@ import type {
   TicketStatus,
   UpdateResult
 } from './lib/domain';
-import { APP_VERSION } from './lib/domain';
+import { APP_VERSION, STORAGE_KEYS } from './lib/domain';
 import { DiagnosticReport, runQuickDiagnostic } from './lib/diagnostics';
 import { checkForUpdates as checkNativeUpdates } from './lib/updates';
 import { openRemoteTool, RemoteSession } from './lib/support';
 import { AgentActionResult, AgentStatus, getAgentStatus, runAgentAction } from './lib/agent';
 
-type AuthTab = 'admin' | 'client';
 type AdminTab = 'queue' | 'devices' | 'releases';
 type ClientTab = 'overview' | 'ticket' | 'maintenance';
 
 type Toast = { message: string; tone?: 'neutral' | 'ok' | 'warn' | 'danger' } | null;
 
+function readThermalMax(payload: Record<string, unknown> | undefined): number | null {
+  if (!payload) return null;
+  const value = payload.maxTemperatureC;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 function App() {
   const [booting, setBooting] = useState(true);
   const [session, setSession] = useState<AppSession | null>(null);
-  const [authTab, setAuthTab] = useState<AuthTab>('client');
   const [adminTab, setAdminTab] = useState<AdminTab>('queue');
   const [clientTab, setClientTab] = useState<ClientTab>('overview');
   const [toast, setToast] = useState<Toast>(null);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
 
   const [adminEmail, setAdminEmail] = useState(backendConfig.localAdminEmail);
   const [adminPassword, setAdminPassword] = useState(backendConfig.localAdminPassword);
@@ -92,6 +98,69 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+
+    if (!accessToken || !backendConfig.supabaseUrl || !backendConfig.supabaseAnonKey) return;
+
+    let alive = true;
+    const restoreSession = async () => {
+      try {
+        const baseUrl = backendConfig.supabaseUrl?.replace(/\/$/, '');
+        const anonKey = backendConfig.supabaseAnonKey;
+        if (!baseUrl || !anonKey) return;
+
+        const headers = {
+          apikey: anonKey,
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        };
+
+        const authResponse = await fetch(`${baseUrl}/auth/v1/user`, { headers });
+        if (!authResponse.ok) return;
+
+        const user = await authResponse.json() as { id: string; email: string | null };
+        const profileResponse = await fetch(
+          `${baseUrl}/rest/v1/admin_users?select=*&user_id=eq.${encodeURIComponent(user.id)}&limit=1`,
+          { headers }
+        );
+
+        if (!profileResponse.ok) return;
+        const profiles = await profileResponse.json() as Array<{ user_id: string; email: string; org_name: string }>;
+        const profile = profiles[0];
+        if (!profile) return;
+
+        const session: AppSession = {
+          role: 'admin',
+          backendKind: 'supabase',
+          userId: user.id,
+          accessToken,
+          refreshToken: refreshToken ?? undefined,
+          email: profile.email || user.email || undefined,
+          displayName: profile.org_name,
+          orgName: profile.org_name
+        };
+
+        window.localStorage.setItem(STORAGE_KEYS.session, JSON.stringify(session));
+        if (alive) {
+          setSession(session);
+          setShowAdminLogin(false);
+          window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        }
+      } catch {
+        // Ignore hash restore errors and fall back to the regular login form.
+      }
+    };
+
+    void restoreSession();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!session) {
       setAdminDashboard(null);
       setClientDashboard(null);
@@ -116,6 +185,22 @@ function App() {
     const timeout = window.setTimeout(() => setToast(null), 3500);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        setShowAdminLogin(true);
+      }
+
+      if (event.key === 'Escape') {
+        setShowAdminLogin(false);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   async function refreshAdmin() {
     setIsBusy(true);
@@ -186,6 +271,7 @@ function App() {
       setUpdateResult(null);
       setAgentResult(null);
       setSelectedTicketId('');
+      setShowAdminLogin(false);
       notify('Sesion cerrada.', 'neutral');
     });
   }
@@ -399,103 +485,80 @@ function App() {
             <span className="brand-mark"><i /></span>
             <span>
               <b>UNDERDOCK</b>
-              <small>SUPPORT DECK</small>
+              <small>LOGIN</small>
             </span>
           </button>
           <div className="top-nav auth-top-nav">
-            <button className={authTab === 'client' ? 'active' : ''} onClick={() => setAuthTab('client')}>CLIENTE</button>
-            <button className={authTab === 'admin' ? 'active' : ''} onClick={() => setAuthTab('admin')}>ADMIN</button>
+            <button className="active" onClick={() => setShowAdminLogin(false)}>ACCESO CLIENTE</button>
           </div>
           <div className="mode-switch">
             <button className="active">{backendConfig.backendKind.toUpperCase()}</button>
-            <button>{backendConfig.backendKind === 'supabase' ? 'SYNC' : 'LOCAL'}</button>
           </div>
         </header>
 
         <section className="auth-shell">
-          <div className="auth-hero">
-            <p className="kicker">SOPORTE TECNICO / REMOTO / TICKETS</p>
-            <h1>Instala la PC, registra el equipo y manejalo desde tu panel.</h1>
-            <p>
-              Este build separa cliente y admin, guarda tickets en backend cuando esta configurado y mantiene un modo local
-              de respaldo para pruebas rapidas.
-            </p>
-            <div className="auth-badges">
-              <StatusPill tone={backendConfig.backendKind === 'supabase' ? 'ok' : 'warn'}>
-                BACKEND {backendConfig.backendKind.toUpperCase()}
-              </StatusPill>
-              <StatusPill tone="neutral">APP {APP_VERSION}</StatusPill>
-              <StatusPill tone="neutral">{appBackend.description}</StatusPill>
+          <section className="line-panel auth-card auth-card-single">
+            <p className="section-kicker">ACCESO CLIENTE</p>
+            <h2>Entrar con tu codigo</h2>
+            <div className="field-stack">
+              <label>
+                <span>Codigo</span>
+                <input
+                  value={clientPairingCode}
+                  onChange={(event) => setClientPairingCode(event.target.value.toUpperCase())}
+                  placeholder={backendConfig.backendKind === 'local' ? 'DEMO-PAIR' : 'Codigo que te dio soporte'}
+                  autoComplete="one-time-code"
+                />
+              </label>
+              <label>
+                <span>Nombre del equipo</span>
+                <input value={clientDeviceName} onChange={(event) => setClientDeviceName(event.target.value)} placeholder="Notebook de Juan" />
+              </label>
             </div>
-          </div>
+            <button className="gold-action full" onClick={handleClientRegister} disabled={isBusy}>
+              <MonitorCog size={14} /> Entrar
+            </button>
+            <div className="mini-notes auth-footnote">
+              <p>Sin cuenta. Solo el codigo que te pasa soporte.</p>
+              <button className="text-link" onClick={() => setShowAdminLogin(true)}>
+                Acceso admin
+              </button>
+            </div>
+          </section>
+        </section>
 
-          <div className="auth-grid">
-            {authTab === 'admin' ? (
-              <section className="line-panel auth-card">
-                <p className="section-kicker">ADMIN LOGIN</p>
-                <h2>Entrar al panel admin</h2>
-                <div className="field-stack">
-                  <label>
-                    <span>Email</span>
-                    <input value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} placeholder="admin@tudominio.com" />
-                  </label>
-                  <label>
-                    <span>Password</span>
-                    <input type="password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} placeholder="Password" />
-                  </label>
+        {showAdminLogin && (
+          <div className="admin-modal-backdrop" role="presentation" onClick={() => setShowAdminLogin(false)}>
+            <section className="line-panel auth-card admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-login-title" onClick={(event) => event.stopPropagation()}>
+              <div className="admin-modal-header">
+                <div>
+                  <p className="section-kicker">ADMIN</p>
+                  <h2 id="admin-login-title">Entrar al panel admin</h2>
                 </div>
-                <button className="gold-action full" onClick={handleAdminSignIn} disabled={isBusy}>
-                  <Lock size={14} /> Entrar como admin
+                <button className="admin-modal-close" onClick={() => setShowAdminLogin(false)} aria-label="Cerrar acceso admin">
+                  Cerrar
                 </button>
-                <div className="mini-notes">
-                  <p>En local: {backendConfig.localAdminEmail} / {backendConfig.localAdminPassword}</p>
-                  <p>Con Supabase: admin_users debe tener un registro para tu usuario autenticado.</p>
-                </div>
-              </section>
-            ) : (
-              <section className="line-panel auth-card">
-                <p className="section-kicker">CLIENT REGISTER</p>
-                <h2>Registrar equipo</h2>
-                <div className="field-stack">
-                  <label>
-                    <span>Pairing code</span>
-                    <input value={clientPairingCode} onChange={(event) => setClientPairingCode(event.target.value.toUpperCase())} placeholder="AAAA1111" />
-                  </label>
-                  <label>
-                    <span>Nombre del equipo</span>
-                    <input value={clientDeviceName} onChange={(event) => setClientDeviceName(event.target.value)} placeholder="Notebook de Juan" />
-                  </label>
-                  <label>
-                    <span>Motivo inicial</span>
-                    <textarea value={clientIssue} onChange={(event) => setClientIssue(event.target.value)} />
-                  </label>
-                </div>
-                <button className="gold-action full" onClick={handleClientRegister} disabled={isBusy}>
-                  <MonitorCog size={14} /> Registrar y crear acceso
-                </button>
-                <div className="mini-notes">
-                  <p>En local demo el codigo es DEMO-PAIR.</p>
-                  <p>Con backend real, el admin genera el pairing code desde su panel.</p>
-                </div>
-              </section>
-            )}
-
-            <section className="line-panel auth-card auth-side">
-              <p className="section-kicker">LO QUE QUEDA LISTO</p>
-              <div className="feature-list">
-                <div><Check size={14} /> Login separado para admin y cliente.</div>
-                <div><ClipboardList size={14} /> Ticket y diagnostico sincronizados.</div>
-                <div><Wifi size={14} /> Ruta para backend + realtime.</div>
-                <div><ArrowDownToLine size={14} /> Base para updates remotos.</div>
-                <div><Wrench size={14} /> Remoto con RustDesk como motor.</div>
               </div>
+              <div className="field-stack">
+                <label>
+                  <span>Email</span>
+                  <input value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} placeholder="admin@tudominio.com" />
+                </label>
+                <label>
+                  <span>Password</span>
+                  <input type="password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} placeholder="Password" />
+                </label>
+              </div>
+              <button className="gold-action full" onClick={handleAdminSignIn} disabled={isBusy}>
+                <Lock size={14} /> Entrar como admin
+              </button>
               <div className="mini-notes">
-                <p>Si no cargaste Supabase, funciona en modo local en esta PC.</p>
-                <p>Para sincronizar otra maquina, necesitas backend y pairing real.</p>
+                <p>Con Supabase: usa tu usuario y la fila en `admin_users`.</p>
+                <p>En local: usa las credenciales de `.env`.</p>
               </div>
             </section>
           </div>
-        </section>
+        )}
 
         {toast && (
           <ToastBar toast={toast} />
@@ -686,7 +749,9 @@ function AdminWorkspace({
   onNativeUpdateCheck: () => void;
 }) {
   const selectedDevice = dashboard?.devices.find((device) => device.id === selectedTicket?.deviceId);
+  const selectedDeviceDiagnostic = dashboard?.diagnostics.find((diagnostic) => diagnostic.deviceId === selectedTicket?.deviceId);
   const latestRelease = dashboard?.releases[0];
+  const adminThermal = readThermalMax(selectedDeviceDiagnostic?.payload);
 
   return (
     <div className="stage-grid admin-grid">
@@ -718,6 +783,7 @@ function AdminWorkspace({
         <DataLine label="Equipo" value={selectedDevice?.displayName ?? '—'} />
         <DataLine label="Estado" value={selectedTicket?.status.toUpperCase() ?? '—'} />
         <DataLine label="Release" value={latestRelease?.version ?? '—'} />
+        <DataLine label="Temp max" value={adminThermal != null ? `${adminThermal.toFixed(1)} °C` : '—'} muted={adminThermal == null} />
       </section>
 
       {activeTab === 'queue' && (
@@ -809,6 +875,18 @@ function ClientWorkspace({
   const latestTicket = dashboard?.tickets[0];
   const latestDiagnostic = dashboard?.diagnostics[0];
   const release = dashboard?.latestRelease ?? null;
+  const latestDiagnosticPayload = latestDiagnostic?.payload as Partial<DiagnosticReport> | undefined;
+  const thermalReport = diagnostic ?? latestDiagnosticPayload ?? null;
+  const thermalSource = thermalReport?.thermalZones?.[0] ?? null;
+  const thermalLabel = thermalReport?.maxTemperatureC ?? null;
+  const thermalNote = thermalReport?.temperatureNote ?? 'Ejecuta el diagnostico para leer temperatura.';
+  const thermalTone: 'neutral' | 'ok' | 'warn' | 'danger' = thermalLabel == null
+    ? 'neutral'
+    : thermalLabel >= 85
+      ? 'danger'
+      : thermalLabel >= 70
+        ? 'warn'
+        : 'ok';
 
   return (
     <div className="stage-grid client-grid">
@@ -842,7 +920,12 @@ function ClientWorkspace({
         <DataLine label="OS" value={dashboard?.device.os ?? 'Pendiente'} muted={!dashboard} />
         <DataLine label="Ticket" value={latestTicket?.id ?? 'Pendiente'} muted={!dashboard} />
         <DataLine label="Release" value={release?.version ?? 'Pendiente'} muted={!dashboard} />
+        <DataLine label="Temp max" value={thermalLabel != null ? `${thermalLabel.toFixed(1)} °C` : 'Pendiente'} muted={thermalLabel == null} />
+        <DataLine label="Zona" value={thermalSource?.name ?? 'No detectada'} muted={!thermalSource} />
+        <DataLine label="Sensor" value={thermalSource?.source ?? 'ACPI / WMI'} muted={!thermalSource} />
+        <DataLine label="Nota" value={thermalNote} muted={!thermalReport} />
         <DataLine label="Update" value={updateResult?.status.toUpperCase() ?? 'PENDIENTE'} muted={!updateResult} />
+        <StatusPill tone={thermalTone}>{thermalLabel == null ? 'TEMP PENDIENTE' : thermalLabel >= 85 ? 'TEMP CRITICA' : thermalLabel >= 70 ? 'TEMP ALTA' : 'TEMP OK'}</StatusPill>
       </section>
 
       {activeTab === 'overview' && (
@@ -887,6 +970,10 @@ function ClientWorkspace({
             <button className="matrix-action" onClick={() => onAgentAction('defender_status')}>
               <ShieldCheck size={26} />
               Defender
+            </button>
+            <button className="matrix-action" onClick={() => onAgentAction('thermal_status')}>
+              <Thermometer size={26} />
+              Temperatura
             </button>
           </div>
           <div className="mini-notes">

@@ -1,5 +1,11 @@
 import { safeInvoke, isTauriRuntime } from './tauri';
 
+export type ThermalZoneReading = {
+  name: string;
+  temperatureC: number | null;
+  source: string;
+};
+
 export type DiagnosticReport = {
   generatedAt: string;
   computerName: string;
@@ -13,6 +19,9 @@ export type DiagnosticReport = {
   startupItems: number;
   defenderStatus: string;
   pendingReboot: boolean;
+  maxTemperatureC: number | null;
+  temperatureNote: string;
+  thermalZones: ThermalZoneReading[];
   recommendations: string[];
 };
 
@@ -38,11 +47,21 @@ export async function runQuickDiagnostic(): Promise<DiagnosticReport> {
     startupItems: 18,
     defenderStatus: 'Activo',
     pendingReboot: false,
+    maxTemperatureC: 52.4,
+    temperatureNote: 'Modo demo: la lectura térmica real corre dentro de Tauri en Windows.',
+    thermalZones: [
+      {
+        name: 'ACPI\\ThermalZone\\THM0',
+        temperatureC: 52.4,
+        source: 'root\\wmi:MSAcpi_ThermalZoneTemperature'
+      }
+    ],
     recommendations: [
-      'Revisar programas de inicio: hay más de 12 entradas cargando con Windows.',
+      'Revisar programas de inicio: hay mas de 12 entradas cargando con Windows.',
       'Espacio en disco aceptable, pero conviene limpiar temporales si baja de 15%.',
-      'Crear punto de restauración antes de cualquier mantenimiento profundo.',
+      'Crear punto de restauracion antes de cualquier mantenimiento profundo.',
       'No ejecutar limpieza de registro ni scripts no auditados.'
     ]
   };
 }
+
