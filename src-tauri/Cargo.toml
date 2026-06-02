@@ -1,6 +1,6 @@
 [package]
 name = "underdock"
-version = "0.1.8"
+version = "0.1.9"
 description = "UnderDock desktop support app"
 authors = ["Ratwaredev"]
 edition = "2021"

@@ -38,6 +38,7 @@ type LocalState = {
   sessions: SessionRecord[];
   releases: ReleaseRecord[];
   pairingCodes: PairingCodeRecord[];
+  rememberedSession: StoredSession;
 };
 
 type StoredSession = AppSession | null;
@@ -183,7 +184,8 @@ function createSeedState(): LocalState {
         expiresAt: new Date(Date.now() + 1000 * 60 * 30).toISOString(),
         createdAt: releaseBase
       }
-    ]
+    ],
+    rememberedSession: null
   };
 }
 
@@ -215,6 +217,11 @@ function getRuntimeConfig(): RuntimeConfig {
 function createLocalBackend(config: RuntimeConfig): BackendBase {
   const getState = () => readLocalState();
   const setState = (state: LocalState) => writeLocalState(state);
+  const rememberSession = (session: StoredSession) => {
+    const state = getState();
+    state.rememberedSession = session;
+    setState(state);
+  };
 
   return {
     kind: 'local',
@@ -224,6 +231,17 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
       const session = readSession();
       if (session?.role === 'admin' && session.email) return session;
       if (session?.role === 'client' && session.deviceToken) return session;
+
+      const remembered = getState().rememberedSession;
+      if (remembered?.role === 'admin' && remembered.email) {
+        writeSession(remembered);
+        return remembered;
+      }
+      if (remembered?.role === 'client' && remembered.deviceToken) {
+        writeSession(remembered);
+        return remembered;
+      }
+
       return null;
     },
     async signInAdmin(email, password) {
@@ -241,10 +259,12 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
       };
 
       writeSession(session);
+      rememberSession(session);
       return { session, profile: state.profile };
     },
     async signOut() {
       writeSession(null);
+      rememberSession(null);
     },
     async generatePairingCode() {
       const state = getState();
@@ -298,6 +318,7 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
       };
 
       writeSession(session);
+      rememberSession(session);
       return { session, device };
     },
     async getAdminDashboard() {
