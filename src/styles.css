@@ -142,8 +142,6 @@ button { color: inherit; }
 
 .status-item,
 .metric,
-.activity-row,
-.activity-foot,
 .update-banner,
 .detail-meta,
 .progress-box,
@@ -158,8 +156,6 @@ button { color: inherit; }
 
 .status-item span,
 .metric span,
-.activity-row p,
-.activity-foot span,
 .detail-copy,
 .lead,
 .eyebrow,
@@ -223,7 +219,15 @@ button { color: inherit; }
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.12fr) minmax(0, 1.28fr) minmax(310px, .9fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1.32fr);
+  gap: 16px;
+  margin-top: 16px;
+  align-items: start;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
   gap: 16px;
   margin-top: 16px;
   align-items: start;
@@ -231,8 +235,13 @@ button { color: inherit; }
 
 .status-panel,
 .dashboard-panel,
-.detail-panel,
-.activity-panel {
+.detail-panel {
+  padding: 18px;
+}
+
+.admin-login,
+.admin-summary,
+.admin-list {
   padding: 18px;
 }
 
@@ -264,6 +273,10 @@ button { color: inherit; }
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.admin-matrix {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .metric {
@@ -299,14 +312,12 @@ button { color: inherit; }
 }
 
 .update-banner strong,
-.activity-row strong,
 .detail-meta strong {
   display: block;
   font-size: 16px;
 }
 
 .update-banner p,
-.activity-row p,
 .detail-copy,
 .lead {
   margin: 4px 0 0;
@@ -494,54 +505,69 @@ button { color: inherit; }
   accent-color: var(--gold-2);
 }
 
+.admin-login-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.admin-login-form label {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-login-form span {
+  color: var(--muted);
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: .18em;
+  font-size: 10px;
+}
+
+.admin-login-form input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(241,240,232,.14);
+  background: rgba(0,0,0,.2);
+  color: var(--ink);
+  padding: 11px 12px;
+  outline: 0;
+}
+
+.admin-login-form input:focus {
+  border-color: rgba(215,170,0,.55);
+}
+
+.admin-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-row {
+  border: 1px solid rgba(241,240,232,.1);
+  background: rgba(4,5,5,.4);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-row strong {
+  display: block;
+  font-size: 15px;
+}
+
+.admin-row p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .button-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-}
-
-.activity-panel {
-  display: grid;
-  gap: 12px;
-}
-
-.muted-icon { color: var(--muted); }
-
-.activity-list {
-  display: grid;
-  gap: 10px;
-}
-
-.activity-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 14px;
-}
-
-.activity-row__icon {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  color: var(--gold-2);
-  border: 1px solid rgba(241,240,232,.08);
-}
-
-.activity-tag.ok { color: var(--ok); border-color: rgba(136,215,162,.25); }
-.activity-tag.warn { color: var(--warn); border-color: rgba(239,195,79,.25); }
-.activity-tag.neutral { color: var(--ink); }
-
-.activity-foot {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-}
-
-.activity-foot strong {
-  display: block;
-  margin-top: 4px;
 }
 
 .toast {
@@ -585,12 +611,13 @@ button { color: inherit; }
 
 @media (max-width: 1200px) {
   .shell-header,
-  .dashboard-grid {
+  .dashboard-grid,
+  .admin-grid {
     grid-template-columns: 1fr;
   }
 
   .status-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -599,15 +626,19 @@ button { color: inherit; }
   .app-shell__frame { inset: 10px; }
   .status-strip,
   .status-matrix,
+  .admin-matrix,
   .action-grid,
   .chip-grid,
   .field-grid,
   .detail-meta {
     grid-template-columns: 1fr;
   }
+  .admin-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
   .update-banner,
-  .progress-box,
-  .activity-row {
+  .progress-box {
     grid-template-columns: 1fr;
     display: grid;
     align-items: start;

@@ -50,6 +50,7 @@ type BackendBase = {
   bootstrap(): Promise<StoredSession>;
   signInAdmin(email: string, password: string): Promise<SignInResult>;
   signOut(): Promise<void>;
+  signOutAdmin(): Promise<void>;
   generatePairingCode(): Promise<PairingCodeRecord>;
   registerClient(input: RegisterClientInput): Promise<ClientBootstrap>;
   getAdminDashboard(): Promise<AdminDashboard>;
@@ -65,7 +66,31 @@ type BackendBase = {
 function readSession(): StoredSession {
   if (typeof window === 'undefined') return null;
 
-  const raw = window.localStorage.getItem(STORAGE_KEYS.session);
+  const tryParse = (raw: string | null) => {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as StoredSession;
+    } catch {
+      return null;
+    }
+  };
+
+  const current = tryParse(window.localStorage.getItem(STORAGE_KEYS.clientSession));
+  if (current?.role === 'client' && current.deviceToken) return current;
+
+  const legacy = tryParse(window.localStorage.getItem('underdock.session.v1'));
+  if (legacy?.role === 'client' && legacy.deviceToken) {
+    window.localStorage.setItem(STORAGE_KEYS.clientSession, JSON.stringify(legacy));
+    return legacy;
+  }
+
+  return null;
+}
+
+function readAdminSession(): StoredSession {
+  if (typeof window === 'undefined') return null;
+
+  const raw = window.localStorage.getItem(STORAGE_KEYS.adminSession);
   if (!raw) return null;
 
   try {
@@ -78,11 +103,21 @@ function readSession(): StoredSession {
 function writeSession(session: StoredSession) {
   if (typeof window === 'undefined') return;
   if (!session) {
-    window.localStorage.removeItem(STORAGE_KEYS.session);
+    window.localStorage.removeItem(STORAGE_KEYS.clientSession);
     return;
   }
 
-  window.localStorage.setItem(STORAGE_KEYS.session, JSON.stringify(session));
+  window.localStorage.setItem(STORAGE_KEYS.clientSession, JSON.stringify(session));
+}
+
+function writeAdminSession(session: StoredSession) {
+  if (typeof window === 'undefined') return;
+  if (!session) {
+    window.localStorage.removeItem(STORAGE_KEYS.adminSession);
+    return;
+  }
+
+  window.localStorage.setItem(STORAGE_KEYS.adminSession, JSON.stringify(session));
 }
 
 function readLocalState(): LocalState {
@@ -217,10 +252,13 @@ function getRuntimeConfig(): RuntimeConfig {
 function createLocalBackend(config: RuntimeConfig): BackendBase {
   const getState = () => readLocalState();
   const setState = (state: LocalState) => writeLocalState(state);
-  const rememberSession = (session: StoredSession) => {
-    const state = getState();
-    state.rememberedSession = session;
-    setState(state);
+  const requireAdminSession = () => {
+    const session = readAdminSession();
+    if (!session?.email) {
+      throw new Error('No hay sesion admin activa.');
+    }
+
+    return session;
   };
 
   return {
@@ -229,18 +267,7 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
     description: 'Modo local demo. Los datos quedan en el navegador de esta maquina.',
     async bootstrap() {
       const session = readSession();
-      if (session?.role === 'admin' && session.email) return session;
       if (session?.role === 'client' && session.deviceToken) return session;
-
-      const remembered = getState().rememberedSession;
-      if (remembered?.role === 'admin' && remembered.email) {
-        writeSession(remembered);
-        return remembered;
-      }
-      if (remembered?.role === 'client' && remembered.deviceToken) {
-        writeSession(remembered);
-        return remembered;
-      }
 
       return null;
     },
@@ -258,15 +285,17 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
         orgName: state.profile.orgName
       };
 
-      writeSession(session);
-      rememberSession(session);
+      writeAdminSession(session);
       return { session, profile: state.profile };
     },
     async signOut() {
       writeSession(null);
-      rememberSession(null);
+    },
+    async signOutAdmin() {
+      writeAdminSession(null);
     },
     async generatePairingCode() {
+      requireAdminSession();
       const state = getState();
       const code = createPairingCode();
       const record: PairingCodeRecord = {
@@ -318,10 +347,10 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
       };
 
       writeSession(session);
-      rememberSession(session);
       return { session, device };
     },
     async getAdminDashboard() {
+      requireAdminSession();
       const state = getState();
       return clone({
         profile: state.profile,
@@ -418,6 +447,7 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
       return clone(session);
     },
     async updateTicketStatus(ticketId, status) {
+      requireAdminSession();
       const state = getState();
       const ticket = state.tickets.find((item) => item.id === ticketId);
       if (!ticket) throw new Error('No se encontro el ticket.');
@@ -478,6 +508,9 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
           throw new Error('Supabase no esta configurado.');
         },
         async signOut() {
+          return;
+        },
+        async signOutAdmin() {
           return;
         },
         async generatePairingCode() {
@@ -629,14 +662,17 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
         orgName: profile.orgName
       };
 
-      writeSession(session);
+      writeAdminSession(session);
       return { session, profile };
     },
     async signOut() {
       writeSession(null);
     },
+    async signOutAdmin() {
+      writeAdminSession(null);
+    },
     async generatePairingCode() {
-      const session = readSession();
+      const session = readAdminSession();
       if (!session?.accessToken) {
         throw new Error('Necesitas iniciar sesion como admin para generar codigos de activacion.');
       }
@@ -666,7 +702,7 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
       return { session, device };
     },
     async getAdminDashboard() {
-      const session = readSession();
+      const session = readAdminSession();
       if (!session?.accessToken) throw new Error('No hay sesion admin activa.');
 
       const [profile, devices, tickets, diagnostics, releases, pairingCodes] = await Promise.all([
@@ -712,7 +748,7 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
       return Array.isArray(result) ? result[0] : result;
     },
     async updateTicketStatus(ticketId, status) {
-      const session = readSession();
+      const session = readAdminSession();
       if (!session?.accessToken) throw new Error('No hay sesion admin activa.');
 
       const rows = await request<TicketRecord[]>(

@@ -1,35 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import {
   Bell,
   CheckCircle2,
-  CircleAlert,
-  Clock3,
   Download,
-  Ellipsis,
   Globe2,
+  KeyRound,
   RefreshCw,
   ShieldCheck,
   TerminalSquare,
   Trash2,
   Wifi
 } from 'lucide-react';
-import { appBackend, backendConfig } from './lib/backend';
+import { appBackend } from './lib/backend';
 import type {
+  AdminDashboard,
   AppSession,
   ClientDashboard,
   DiagnosticRecord,
+  PairingCodeRecord,
   Priority,
   TicketRecord,
   UpdateResult
 } from './lib/domain';
-import { APP_VERSION, STORAGE_KEYS } from './lib/domain';
+import { APP_VERSION } from './lib/domain';
 import { DiagnosticReport, runQuickDiagnostic } from './lib/diagnostics';
+import { openAdminWindow } from './lib/admin';
 import { checkForUpdates as checkNativeUpdates, installLatestUpdate as installNativeUpdate } from './lib/updates';
 import { openRemoteTool, RemoteSession } from './lib/support';
 import { AgentActionResult, AgentStatus, getAgentStatus, runAgentAction } from './lib/agent';
 
 type Toast = { message: string; tone?: 'neutral' | 'ok' | 'warn' | 'danger' } | null;
+type AppView = 'client' | 'admin';
 type SectionId = 'remote' | 'ticket' | 'quick' | 'advanced' | 'cleaner';
 
 type QuickCheckItem = {
@@ -39,7 +41,18 @@ type QuickCheckItem = {
   tone: 'ok' | 'warn' | 'danger' | 'neutral';
 };
 
+function getAppView(): AppView {
+  if (typeof window === 'undefined') return 'client';
+
+  const view = new URLSearchParams(window.location.search).get('view');
+  return view === 'admin' ? 'admin' : 'client';
+}
+
 function App() {
+  return getAppView() === 'admin' ? <AdminApp /> : <ClientApp />;
+}
+
+function ClientApp() {
   const [booting, setBooting] = useState(true);
   const [session, setSession] = useState<AppSession | null>(null);
   const [toast, setToast] = useState<Toast>(null);
@@ -52,7 +65,7 @@ function App() {
   const [remoteSession, setRemoteSession] = useState<RemoteSession | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [agentResult, setAgentResult] = useState<AgentActionResult | null>(null);
-  const [activeSection, setActiveSection] = useState<SectionId>('remote');
+  const [activeSection, setActiveSection] = useState<SectionId>('quick');
   const [showTicketForm, setShowTicketForm] = useState(false);
   const [ticketIssue, setTicketIssue] = useState('Mi PC tiene un problema y necesito ayuda.');
   const [ticketCategory, setTicketCategory] = useState('Hardware');
@@ -101,19 +114,8 @@ function App() {
       const result = await checkNativeUpdates();
       if (!alive) return;
       setUpdateResult(result);
-      if (result.status !== 'available') return;
-      try {
-        setIsUpdating(true);
-        setUpdateProgress('0%');
-        const installed = await installNativeUpdate((progress) => {
-          if (alive) setUpdateProgress(progress);
-        });
-        if (alive) setUpdateResult(installed);
-      } finally {
-        if (alive) {
-          setIsUpdating(false);
-          setUpdateProgress('');
-        }
+      if (result.status === 'available') {
+        notify(`Hay una actualización disponible: ${result.nextVersion ?? 'nueva versión'}`, 'warn');
       }
     })();
     return () => {
@@ -202,25 +204,34 @@ function App() {
       setQuickDiagnostic(null);
       setAgentResult(null);
       setShowTicketForm(false);
-      setActiveSection('remote');
+      setActiveSection('quick');
       notify('Sesion cerrada.', 'neutral');
     });
   }
 
   async function handleRefresh() {
-    if (!session?.deviceToken) {
-      notify('No hay un equipo activo para actualizar.', 'warn');
-      return;
-    }
-
-    await refreshClient(session.deviceToken);
     try {
-      const status = await getAgentStatus();
-      setAgentStatus(status);
+      const result = await checkNativeUpdates();
+      setUpdateResult(result);
+      if (result.status === 'available') {
+        notify(`Actualización disponible: ${result.nextVersion}`, 'warn');
+        return;
+      }
+
+      if (session?.deviceToken) {
+        await refreshClient(session.deviceToken);
+        try {
+          const status = await getAgentStatus();
+          setAgentStatus(status);
+        } catch {
+          setAgentStatus(null);
+        }
+      }
+
+      notify(result.notes || 'Todo al día.', 'ok');
     } catch {
-      setAgentStatus(null);
+      notify('No se pudo comprobar actualizaciones.', 'danger');
     }
-    notify('Estado actualizado.', 'ok');
   }
 
   async function handleRequestRemoteSupport() {
@@ -293,26 +304,26 @@ function App() {
   }
 
   async function handleRunQuickDiagnostic() {
-    if (!session?.deviceToken) {
-      notify('Necesitas un equipo activo para correr el diagnóstico.', 'warn');
-      return;
-    }
-
     setIsBusy(true);
     try {
       const report = await runQuickDiagnostic();
       setQuickDiagnostic(report);
       setDiagnostic(report);
-      await appBackend.saveDiagnostic(
-        {
-          deviceId: session.deviceId ?? '',
-          payload: report as unknown as Record<string, unknown>
-        },
-        session.deviceToken
-      );
-      await refreshClient(session.deviceToken);
       setActiveSection('quick');
-      notify('Diagnóstico rápido guardado.', 'ok');
+      if (session?.deviceToken && session.deviceId) {
+        await appBackend.saveDiagnostic(
+          {
+            deviceId: session.deviceId,
+            payload: report as unknown as Record<string, unknown>
+          },
+          session.deviceToken
+        );
+        await refreshClient(session.deviceToken);
+        notify('Diagnóstico rápido guardado.', 'ok');
+        return;
+      }
+
+      notify('Diagnóstico rápido completado en esta PC.', 'ok');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'No se pudo ejecutar el diagnóstico.', 'danger');
     } finally {
@@ -321,11 +332,6 @@ function App() {
   }
 
   async function handleRunAdvancedDiagnostic() {
-    if (!session?.deviceToken) {
-      notify('Necesitas un equipo activo para el diagnóstico avanzado.', 'warn');
-      return;
-    }
-
     setAdvancedDiagnostic((current) => ({
       ...current,
       running: true,
@@ -353,14 +359,16 @@ function App() {
         result: enriched
       });
       setDiagnostic(enriched);
-      await appBackend.saveDiagnostic(
-        {
-          deviceId: session.deviceId ?? '',
-          payload: enriched as unknown as Record<string, unknown>
-        },
-        session.deviceToken
-      );
-      await refreshClient(session.deviceToken);
+      if (session?.deviceToken && session.deviceId) {
+        await appBackend.saveDiagnostic(
+          {
+            deviceId: session.deviceId,
+            payload: enriched as unknown as Record<string, unknown>
+          },
+          session.deviceToken
+        );
+        await refreshClient(session.deviceToken);
+      }
       notify('Diagnóstico avanzado completado.', 'ok');
     } catch (error) {
       setAdvancedDiagnostic((current) => ({
@@ -410,6 +418,14 @@ function App() {
     }
   }
 
+  async function handleOpenAdminPanel() {
+    try {
+      await openAdminWindow();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'No se pudo abrir el panel interno.', 'danger');
+    }
+  }
+
   async function handleNativeUpdateInstall() {
     setIsUpdating(true);
     try {
@@ -426,17 +442,9 @@ function App() {
 
   const status = useMemo(() => {
     const latestDiagnostic = clientDashboard?.diagnostics[0];
-    const latestTicket = clientDashboard?.tickets[0];
-    const remoteState = remoteSession
-      ? 'Conectado'
-      : latestTicket?.status === 'nuevo'
-        ? 'Esperando técnico'
-        : 'Disponible';
     return {
-      online: session ? 'Online' : 'Sin sesión',
       version: APP_VERSION,
-      lastDiagnostic: latestDiagnostic?.generatedAt ?? 'Sin revisión',
-      remoteState
+      lastDiagnostic: latestDiagnostic?.generatedAt ?? 'Sin revisión'
     };
   }, [clientDashboard?.diagnostics, clientDashboard?.tickets, remoteSession, session]);
 
@@ -524,7 +532,6 @@ function App() {
         </div>
 
         <div className="status-strip">
-          <StatusItem label="Estado del equipo" value={status.online} tone={session ? 'ok' : 'warn'} />
           <StatusItem label="Versión" value={`v${status.version}`} tone="neutral" />
           <StatusItem label="Última revisión" value={status.lastDiagnostic} tone="neutral" />
         </div>
@@ -532,6 +539,9 @@ function App() {
         <div className="header-actions">
           <button className="btn btn-ghost" onClick={handleRefresh} disabled={isBusy || isUpdating}>
             <RefreshCw size={16} /> Actualizar
+          </button>
+          <button className="btn btn-ghost btn-quiet" onClick={handleOpenAdminPanel}>
+            Interno
           </button>
           <button className="btn btn-ghost btn-quiet" onClick={handleSignOut}>
             Salir
@@ -561,14 +571,6 @@ function App() {
           onAdvancedDiagnostic={handleRunAdvancedDiagnostic}
           onOpenCleaner={() => setActiveSection('cleaner')}
           showTicketForm={showTicketForm}
-        />
-
-        <ActivityPanel
-          clientDashboard={clientDashboard}
-          remoteSession={remoteSession}
-          quickDiagnostic={quickDiagnostic ?? diagnostic}
-          agentStatus={agentStatus}
-          agentResult={agentResult}
         />
 
         <DetailPanel
@@ -608,6 +610,297 @@ function App() {
   );
 }
 
+function AdminApp() {
+  const [session, setSession] = useState<AppSession | null>(null);
+  const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
+  const [toast, setToast] = useState<Toast>(null);
+  const [isBusy, setIsBusy] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState('');
+  const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
+  const [email, setEmail] = useState('admin@underdock.local');
+  const [password, setPassword] = useState('');
+  const [generatedCode, setGeneratedCode] = useState<PairingCodeRecord | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const result = await checkNativeUpdates();
+      if (!alive) return;
+      setUpdateResult(result);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
+  async function loadDashboard() {
+    setIsBusy(true);
+    try {
+      const panel = await appBackend.getAdminDashboard();
+      setDashboard(panel);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'No se pudo cargar el panel admin.', 'danger');
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  function notify(message: string, tone: NonNullable<Toast>['tone'] = 'neutral') {
+    setToast({ message, tone });
+  }
+
+  async function handleSignIn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsBusy(true);
+    try {
+      const result = await appBackend.signInAdmin(email.trim(), password);
+      setSession(result.session);
+      setPassword('');
+      notify('Panel admin activado.', 'ok');
+      await loadDashboard();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'No se pudo iniciar sesion admin.', 'danger');
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleSignOutAdmin() {
+    setIsBusy(true);
+    try {
+      await appBackend.signOutAdmin();
+      setSession(null);
+      setDashboard(null);
+      setGeneratedCode(null);
+      notify('Sesion admin cerrada.', 'neutral');
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleGeneratePairingCode() {
+    setIsBusy(true);
+    try {
+      const code = await appBackend.generatePairingCode();
+      setGeneratedCode(code);
+      await loadDashboard();
+      notify(`Codigo generado: ${code.code}`, 'ok');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'No se pudo generar el codigo.', 'danger');
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleRefreshAdmin() {
+    try {
+      const result = await checkNativeUpdates();
+      setUpdateResult(result);
+      if (session) {
+        await loadDashboard();
+      }
+      notify(result.notes || 'Panel actualizado.', 'ok');
+    } catch {
+      notify('No se pudo actualizar el panel admin.', 'danger');
+    }
+  }
+
+  async function handleInstallUpdate() {
+    setIsUpdating(true);
+    try {
+      const result = await installNativeUpdate((progress) => setUpdateProgress(progress));
+      setUpdateResult(result);
+      notify(result.notes, result.status === 'available' ? 'warn' : 'ok');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'No se pudo instalar la actualizacion.', 'danger');
+    } finally {
+      setIsUpdating(false);
+      setUpdateProgress('');
+    }
+  }
+
+  if (!session) {
+    return (
+      <main className="app-shell admin-shell">
+        <div className="app-shell__bg" />
+        <div className="app-shell__scan" />
+        <div className="app-shell__frame" />
+
+        <header className="shell-header panel">
+          <div className="brand-block">
+            <div className="brand-mark" aria-hidden="true">
+              <span />
+            </div>
+            <div>
+              <h1>UnderDock</h1>
+              <p>Panel interno</p>
+            </div>
+          </div>
+
+          <div className="status-strip">
+            <StatusItem label="Acceso" value="Admin" tone="neutral" />
+            <StatusItem label="Versión" value={`v${APP_VERSION}`} tone="neutral" />
+          </div>
+        </header>
+
+        <section className="admin-login panel">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Administrador</p>
+              <h2>Acceso interno</h2>
+            </div>
+            <span className="subtle">Separado de la pantalla cliente</span>
+          </div>
+
+          <p className="lead">Este panel no comparte sesión con el equipo cliente. Iniciá sesión solo si vas a administrar equipos, tickets y activación.</p>
+
+          <form className="admin-login-form" onSubmit={handleSignIn}>
+            <label>
+              <span>Email</span>
+              <input value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" />
+            </label>
+            <label>
+              <span>Contraseña</span>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+              />
+            </label>
+            <div className="button-row">
+              <button className="btn btn-primary" type="submit" disabled={isBusy}>
+                <KeyRound size={16} /> Ingresar
+              </button>
+            </div>
+          </form>
+        </section>
+
+        {toast && <ToastBar toast={toast} />}
+        <VersionFooter />
+      </main>
+    );
+  }
+
+  const counts = {
+    devices: dashboard?.devices.length ?? 0,
+    tickets: dashboard?.tickets.length ?? 0,
+    diagnostics: dashboard?.diagnostics.length ?? 0,
+    codes: dashboard?.pairingCodes.length ?? 0
+  };
+
+  return (
+    <main className="app-shell admin-shell">
+      <div className="app-shell__bg" />
+      <div className="app-shell__scan" />
+      <div className="app-shell__frame" />
+
+      <header className="shell-header panel">
+        <div className="brand-block">
+          <div className="brand-mark" aria-hidden="true">
+            <span />
+          </div>
+          <div>
+            <h1>UnderDock Admin</h1>
+            <p>Administración interna</p>
+          </div>
+        </div>
+
+        <div className="status-strip">
+          <StatusItem label="Sesión" value={session.email ?? 'Admin'} tone="neutral" />
+          <StatusItem label="Versión" value={`v${APP_VERSION}`} tone="neutral" />
+          <StatusItem label="Equipos" value={`${counts.devices}`} tone="neutral" />
+        </div>
+
+        <div className="header-actions">
+          <button className="btn btn-ghost" onClick={handleRefreshAdmin} disabled={isBusy || isUpdating}>
+            <RefreshCw size={16} /> Actualizar
+          </button>
+          <button className="btn btn-ghost btn-quiet" onClick={handleSignOutAdmin}>
+            Salir
+          </button>
+        </div>
+      </header>
+
+      <section className="admin-grid">
+        <section className="panel admin-summary">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Resumen</p>
+              <h2>Centro de administración</h2>
+            </div>
+            <span className="subtle">{isBusy ? 'Procesando...' : 'Listo'}</span>
+          </div>
+
+          <div className="status-matrix admin-matrix">
+            <Metric label="Equipos" value={`${counts.devices}`} />
+            <Metric label="Tickets" value={`${counts.tickets}`} />
+            <Metric label="Diagnósticos" value={`${counts.diagnostics}`} />
+            <Metric label="Códigos" value={`${counts.codes}`} />
+          </div>
+
+          <div className="button-row">
+            <button className="btn btn-primary" onClick={handleGeneratePairingCode} disabled={isBusy}>
+              <Download size={16} /> Generar código
+            </button>
+            {updateResult?.status === 'available' && (
+              <button className="btn btn-ghost" onClick={handleInstallUpdate} disabled={isUpdating}>
+                <Download size={16} /> {isUpdating ? updateProgress || 'Instalando' : 'Actualizar app'}
+              </button>
+            )}
+          </div>
+
+          {generatedCode && (
+            <div className="status-note">
+              <ShieldCheck size={16} />
+              <span>Código activo: {generatedCode.code} - vence {generatedCode.expiresAt}</span>
+            </div>
+          )}
+        </section>
+
+        <section className="panel admin-list">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Equipos</p>
+              <h2>Actividad reciente</h2>
+            </div>
+          </div>
+          <div className="admin-stack">
+            {(dashboard?.devices ?? []).slice(0, 5).map((device) => (
+              <div className="admin-row" key={device.id}>
+                <div>
+                  <strong>{device.displayName}</strong>
+                  <p>{device.computerName} · {device.os}</p>
+                </div>
+                <span className="pill">{device.status}</span>
+              </div>
+            ))}
+            {(dashboard?.tickets ?? []).slice(0, 5).map((ticket) => (
+              <div className="admin-row" key={ticket.id}>
+                <div>
+                  <strong>{ticket.id}</strong>
+                  <p>{ticket.issue}</p>
+                </div>
+                <span className="pill">{ticket.status}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </section>
+
+      {toast && <ToastBar toast={toast} />}
+      <VersionFooter />
+    </main>
+  );
+}
+
 function SystemStatusPanel({
   session,
   status,
@@ -617,7 +910,7 @@ function SystemStatusPanel({
   onUpdateInstall
 }: {
   session: AppSession | null;
-  status: { online: string; version: string; lastDiagnostic: string; remoteState: string };
+  status: { version: string; lastDiagnostic: string };
   updateResult: UpdateResult | null;
   isUpdating: boolean;
   updateProgress: string;
@@ -628,15 +921,15 @@ function SystemStatusPanel({
       <div className="section-head">
         <div>
           <p className="eyebrow">Estado del equipo</p>
-          <h2>Centro de control</h2>
+          <h2>PC y salud</h2>
         </div>
-        <span className="pill">{status.remoteState}</span>
+        <span className="pill">{session ? 'Activa' : 'Sin sesión'}</span>
       </div>
       <div className="status-matrix">
         <Metric label="Equipo" value={session?.displayName ?? 'Sin sesión'} />
-        <Metric label="Online" value={status.online} />
         <Metric label="Última revisión" value={status.lastDiagnostic} />
         <Metric label="Versión" value={`v${status.version}`} />
+        <Metric label="Sesión" value={session ? 'Guardada' : 'No iniciada'} />
       </div>
       <div className="status-note">
         <ShieldCheck size={16} />
@@ -826,7 +1119,6 @@ function DetailPanel({
         <div>
           <p className="eyebrow">Detalle</p>
           <h2>
-            {activeSection === 'remote' && 'Soporte remoto'}
             {activeSection === 'ticket' && 'Crear ticket'}
             {activeSection === 'quick' && 'Diagnóstico rápido'}
             {activeSection === 'advanced' && 'Diagnóstico avanzado'}
@@ -838,35 +1130,8 @@ function DetailPanel({
         </button>
       </div>
 
-      {activeSection === 'remote' && (
-        <div className="detail-block">
-          <p className="lead">Solicitá asistencia remota sin salir de esta pantalla.</p>
-          <div className="detail-meta">
-            <div>
-              <span>Estado</span>
-              <strong>{remoteSession ? 'Conectado' : 'Disponible'}</strong>
-            </div>
-            <div>
-              <span>Código de sesión</span>
-              <strong>{remoteSession?.code ?? 'PENDIENTE'}</strong>
-            </div>
-          </div>
-          <p className="detail-copy">
-            {remoteSession?.instructions ?? 'Integración remota pendiente. Se mostrará el código cuando el técnico esté listo.'}
-          </p>
-          <div className="button-row">
-            <button className="btn btn-primary" onClick={onRequestRemoteSupport} disabled={isBusy}>
-              Pedir soporte
-            </button>
-            <button className="btn btn-ghost" onClick={onOpenRemote}>
-              Abrir herramienta remota
-            </button>
-          </div>
-        </div>
-      )}
-
       {activeSection === 'ticket' && (
-      <div className="detail-block">
+        <div className="detail-block">
           <p className="lead">Formulario simple para que el técnico entienda el caso sin pérdida de tiempo.</p>
           <div className="field-grid">
             <label>
@@ -996,49 +1261,6 @@ function DetailPanel({
   );
 }
 
-function ActivityPanel({
-  clientDashboard,
-  remoteSession,
-  quickDiagnostic,
-  agentStatus,
-  agentResult
-}: {
-  clientDashboard: ClientDashboard | null;
-  remoteSession: RemoteSession | null;
-  quickDiagnostic: DiagnosticRecord | DiagnosticReport | null;
-  agentStatus: AgentStatus | null;
-  agentResult: AgentActionResult | null;
-}) {
-  const latestTicket = clientDashboard?.tickets[0];
-  return (
-    <aside className="panel activity-panel">
-      <div className="section-head">
-        <div>
-          <p className="eyebrow">Actividad reciente</p>
-          <h2>Historial útil</h2>
-        </div>
-        <Ellipsis size={18} className="muted-icon" />
-      </div>
-      <div className="activity-list">
-        <ActivityRow title="Último diagnóstico" value={quickDiagnostic ? 'Guardado' : 'Sin datos'} meta={clientDashboard?.diagnostics[0]?.generatedAt ?? 'Pendiente'} tone={quickDiagnostic ? 'ok' : 'neutral'} />
-        <ActivityRow title="Último ticket" value={latestTicket?.id ?? 'Sin tickets'} meta={latestTicket?.issue ?? 'Todavía no hay casos'} tone={latestTicket ? 'warn' : 'neutral'} />
-        <ActivityRow title="Última limpieza" value={agentResult?.ok ? 'Completada' : 'Pendiente'} meta={agentResult?.message ?? 'Sin ejecución reciente'} tone={agentResult?.ok ? 'ok' : 'neutral'} />
-        <ActivityRow title="Soporte remoto" value={remoteSession ? 'Activo' : 'Disponible'} meta={remoteSession?.code ?? 'Sin sesión'} tone={remoteSession ? 'ok' : 'neutral'} />
-      </div>
-      <div className="activity-foot">
-        <div>
-          <span>Estado general</span>
-          <strong>{agentStatus?.mode ?? 'standby'}</strong>
-        </div>
-        <div>
-          <span>Red</span>
-          <strong>{clientDashboard?.device?.platform ?? 'windows'}</strong>
-        </div>
-      </div>
-    </aside>
-  );
-}
-
 function PrimaryActionCard({
   active,
   icon,
@@ -1112,31 +1334,6 @@ function CheckOption({
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
       <span>{label}</span>
     </label>
-  );
-}
-
-function ActivityRow({
-  title,
-  value,
-  meta,
-  tone
-}: {
-  title: string;
-  value: string;
-  meta: string;
-  tone: 'ok' | 'warn' | 'neutral';
-}) {
-  return (
-    <div className="activity-row">
-      <div className="activity-row__icon">
-        {tone === 'ok' ? <CheckCircle2 size={18} /> : tone === 'warn' ? <CircleAlert size={18} /> : <Clock3 size={18} />}
-      </div>
-      <div className="activity-row__body">
-        <strong>{title}</strong>
-        <p>{meta}</p>
-      </div>
-      <span className={`activity-tag ${tone}`}>{value}</span>
-    </div>
   );
 }
 

@@ -3,6 +3,7 @@ use chrono::Utc;
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, process::Command};
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -142,6 +143,25 @@ fn agent_status() -> Result<AgentStatus, String> {
         version: env!("CARGO_PKG_VERSION").to_string(),
         notes: "El agent se ejecuta solo cuando el usuario pide diagnóstico, soporte o mantenimiento. No queda monitoreando la PC.".to_string(),
     })
+}
+
+#[tauri::command]
+fn open_admin_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("admin") {
+        window.show().map_err(|err| format!("No se pudo mostrar el panel admin: {err}"))?;
+        window.set_focus().map_err(|err| format!("No se pudo enfocar el panel admin: {err}"))?;
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(&app, "admin", WebviewUrl::App("index.html?view=admin".into()))
+        .title("UnderDock Admin")
+        .inner_size(1280.0, 860.0)
+        .resizable(true)
+        .decorations(true)
+        .build()
+        .map_err(|err| format!("No se pudo abrir el panel admin: {err}"))?;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -486,6 +506,7 @@ pub fn run() {
             thermal_status,
             create_remote_session,
             agent_status,
+            open_admin_window,
             run_agent_action,
             open_remote_tool
         ])
