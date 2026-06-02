@@ -267,6 +267,7 @@ function ClientApp() {
       setRemoteSession(latest);
       setActiveSection('remote');
       await refreshClient(session.deviceToken);
+      await handleOpenRemote();
       notify(`Ticket ${ticket.id} creado y listo para remoto.`, 'ok');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'No se pudo pedir soporte.', 'danger');
