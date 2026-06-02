@@ -81,7 +81,7 @@ npm run tauri:build
 
 After the build finishes, upload these files from `src-tauri/target/release/bundle/` to GitHub Releases:
 
-- `UnderDock Command UI_0.1.3_x64-setup.exe` or `UnderDock Command UI_0.1.3_x64_en-US.msi`
+- `UnderDock Command UI_0.1.4_x64-setup.exe` or `UnderDock Command UI_0.1.4_x64_en-US.msi`
 - the matching `.sig`
 - `latest.json`
 

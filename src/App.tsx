@@ -520,84 +520,57 @@ function App() {
         <header className="command-bar">
           <button className="brand-lockup" aria-label="UnderDock inicio">
             <span className="brand-mark"><i /></span>
-            <span>
-              <b>UNDERDOCK</b>
-              <small>LOGIN</small>
-            </span>
+            <span><b>UNDERDOCK</b></span>
           </button>
-          <div className="top-nav auth-top-nav">
-            <button className="active" onClick={() => setShowAdminLogin(false)}>ACCESO CLIENTE</button>
-          </div>
-          <div className="mode-switch">
-            <button className="active">{backendConfig.backendKind.toUpperCase()}</button>
-          </div>
         </header>
 
         <section className="auth-shell">
           {updateResult?.status === 'available' && (
             <section className="line-panel auth-update-banner">
-              <p className="section-kicker">UPDATE</p>
-              <h3>Nueva version disponible: {updateResult.nextVersion}</h3>
-              <p>{updateResult.notes}</p>
+              <h3>{updateResult.nextVersion}</h3>
               <button className="gold-action full" onClick={handleNativeUpdateInstall} disabled={isBusy}>
-                <ArrowDownToLine size={14} /> Actualizar ahora
+                <ArrowDownToLine size={14} /> Update
               </button>
             </section>
           )}
           <section className="line-panel auth-card auth-card-single">
-            <p className="section-kicker">ACCESO CLIENTE</p>
-            <h2>Entrar con tu codigo de activacion</h2>
             <div className="field-stack">
               <label>
-                <span>Codigo de activacion</span>
                 <input
                   value={clientPairingCode}
                   onChange={(event) => setClientPairingCode(event.target.value.toUpperCase())}
-                  placeholder={backendConfig.backendKind === 'local' ? 'DEMO-PAIR' : 'Codigo de activacion'}
+                  placeholder={backendConfig.backendKind === 'local' ? 'DEMO-PAIR' : 'CODE'}
                   autoComplete="one-time-code"
                 />
               </label>
             </div>
             <button className="gold-action full" onClick={handleClientRegister} disabled={isBusy}>
-              <MonitorCog size={14} /> Entrar
+              <MonitorCog size={14} /> Enter
             </button>
-            <div className="mini-notes auth-footnote">
-              <p>Sin cuenta. Solo el codigo de activacion que te pasa soporte.</p>
-              <button className="text-link" onClick={() => setShowAdminLogin(true)}>
-                Acceso admin
-              </button>
-            </div>
+            <button className="text-link auth-admin-link" onClick={() => setShowAdminLogin(true)}>
+              Admin
+            </button>
           </section>
         </section>
 
         {showAdminLogin && (
           <div className="admin-modal-backdrop" role="presentation" onClick={() => setShowAdminLogin(false)}>
             <section className="line-panel auth-card admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-login-title" onClick={(event) => event.stopPropagation()}>
-              <div className="admin-modal-header">
-                <div>
-                  <p className="section-kicker">ADMIN</p>
-                  <h2 id="admin-login-title">Entrar al panel admin</h2>
-                </div>
-                <button className="admin-modal-close" onClick={() => setShowAdminLogin(false)} aria-label="Cerrar acceso admin">
-                  Cerrar
-                </button>
-              </div>
               <div className="field-stack">
                 <label>
-                  <span>Email</span>
-                  <input value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} placeholder="admin@tudominio.com" />
+                  <input value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} placeholder="email" />
                 </label>
                 <label>
-                  <span>Password</span>
-                  <input type="password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} placeholder="Password" />
+                  <input type="password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} placeholder="password" />
                 </label>
               </div>
-              <button className="gold-action full" onClick={handleAdminSignIn} disabled={isBusy}>
-                <Lock size={14} /> Entrar como admin
-              </button>
-              <div className="mini-notes">
-                <p>Con Supabase: usa tu usuario y la fila en `admin_users`.</p>
-                <p>En local: usa las credenciales de `.env`.</p>
+              <div className="button-row compact-row">
+                <button className="gold-action" onClick={handleAdminSignIn} disabled={isBusy}>
+                  <Lock size={14} /> Go
+                </button>
+                <button className="line-action" onClick={() => setShowAdminLogin(false)} type="button">
+                  Back
+                </button>
               </div>
             </section>
           </div>
@@ -647,40 +620,35 @@ function App() {
         </div>
       </header>
 
-      <section className="hero-deck">
-        <p className="kicker">{session.role === 'admin' ? 'ADMIN PANEL' : 'CLIENT PANEL'}</p>
-        <h1>
-          {session.role === 'admin'
-            ? 'QUIEN PIDE AYUDA, QUIEN LA RECIBE Y COMO ENTRAR.'
-            : 'EL EQUIPO SE REGISTRA, EL TICKET QUEDA Y EL REMOTO SE ABRE.'}
-        </h1>
-        <p className="subtitle">
-          {session.role === 'admin'
-            ? 'Panel central para ver cola, generar pairing codes, abrir remoto y mover estados.'
-            : 'Mesa de ayuda en la PC del cliente con diagnostico on-demand, tickets y sesion remota.'}
-        </p>
-        <div className="hero-actions">
-          <button className="gold-action" onClick={session.role === 'admin' ? handleGeneratePairingCode : handleCreateTicket} disabled={isBusy}>
-            {session.role === 'admin' ? 'GENERAR PAIRING' : 'CREAR TICKET'}
-          </button>
-          <button className="line-action" onClick={session.role === 'admin' ? handleOpenRemote : handleRunDiagnostic} disabled={isBusy}>
-            {session.role === 'admin' ? 'ABRIR REMOTO' : 'RUN DIAGNOSTIC'}
-          </button>
+      <section className="content-stage compact-stage">
+        <div className="stage-toolbar">
+          <div className="stage-tabs">
+            {session.role === 'admin' ? (
+              <>
+                <button className={adminTab === 'queue' ? 'active' : ''} onClick={() => setAdminTab('queue')}>1</button>
+                <button className={adminTab === 'devices' ? 'active' : ''} onClick={() => setAdminTab('devices')}>2</button>
+                <button className={adminTab === 'releases' ? 'active' : ''} onClick={() => setAdminTab('releases')}>3</button>
+              </>
+            ) : (
+              <>
+                <button className={clientTab === 'overview' ? 'active' : ''} onClick={() => setClientTab('overview')}>1</button>
+                <button className={clientTab === 'ticket' ? 'active' : ''} onClick={() => setClientTab('ticket')}>2</button>
+                <button className={clientTab === 'maintenance' ? 'active' : ''} onClick={() => setClientTab('maintenance')}>3</button>
+              </>
+            )}
+          </div>
+          <div className="stage-actions">
+            <button className="gold-action" onClick={session.role === 'admin' ? handleGeneratePairingCode : handleCreateTicket} disabled={isBusy}>
+              {session.role === 'admin' ? 'Code' : 'Ticket'}
+            </button>
+            <button className="line-action" onClick={session.role === 'admin' ? handleOpenRemote : handleRunDiagnostic} disabled={isBusy}>
+              {session.role === 'admin' ? 'Remote' : 'Diag'}
+            </button>
+          </div>
         </div>
-      </section>
-
-      <section className="content-stage">
-        <div className="stage-line"><span /></div>
-        <StatusRail
-          backendKind={session.backendKind}
-          orgName={session.orgName ?? backendConfig.defaultOrgName}
-          ticketCount={openTickets.length}
-          deviceCount={session.role === 'admin' ? adminDashboard?.devices.length ?? 0 : clientDashboard ? 1 : 0}
-          updateResult={updateResult}
-        />
 
         {session.role === 'admin' ? (
-          <AdminWorkspace
+          <MinimalAdminPanel
             dashboard={adminDashboard}
             activeTab={adminTab}
             selectedTicket={selectedTicket}
@@ -705,7 +673,7 @@ function App() {
             onNativeUpdateCheck={handleNativeUpdateCheck}
           />
         ) : (
-          <ClientWorkspace
+          <MinimalClientPanel
             dashboard={clientDashboard}
             activeTab={clientTab}
             issue={clientIssue}
@@ -765,6 +733,182 @@ function StatusRail({
         <strong>{updateResult?.status?.toUpperCase() ?? 'PENDING'}</strong>
       </div>
     </aside>
+  );
+}
+
+function MinimalAdminPanel({
+  dashboard,
+  activeTab,
+  selectedTicket,
+  selectedTicketId,
+  onSelectTicket,
+  pairingCode,
+  onOpenRemote,
+  onUpdateTicket,
+  onCheckUpdates,
+  onNativeUpdateCheck
+}: {
+  dashboard: AdminDashboard | null;
+  activeTab: AdminTab;
+  selectedTicket?: TicketRecord;
+  selectedTicketId: string;
+  onSelectTicket: (ticketId: string) => void;
+  pairingCode: string;
+  onOpenRemote: () => void;
+  onUpdateTicket: (status: TicketStatus) => void;
+  onCheckUpdates: () => void;
+  onNativeUpdateCheck: () => void;
+}) {
+  const selectedDevice = dashboard?.devices.find((device) => device.id === selectedTicket?.deviceId);
+  const activeTicket = selectedTicket ?? dashboard?.tickets[0];
+
+  return (
+    <div className="single-column">
+      <section className="line-panel compact-panel">
+        <div className="button-row compact-row">
+          <button className="gold-action" onClick={onCheckUpdates}>Check</button>
+          <button className="line-action" onClick={onNativeUpdateCheck}>Native</button>
+          <button className="line-action" onClick={onOpenRemote}>Remote</button>
+        </div>
+        <div className="compact-code" onClick={() => pairingCode && navigator.clipboard?.writeText?.(pairingCode)}>
+          {pairingCode || '----'}
+        </div>
+      </section>
+
+      {activeTab === 'queue' && (
+        <section className="line-panel compact-panel">
+          <div className="compact-list">
+            {(dashboard?.tickets ?? []).map((ticket) => (
+              <button key={ticket.id} className={`compact-item ${ticket.id === selectedTicketId ? 'active' : ''}`} onClick={() => onSelectTicket(ticket.id)}>
+                <span>{ticket.id}</span>
+                <small>{ticket.status}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'devices' && (
+        <section className="line-panel compact-panel">
+          <div className="compact-list">
+            {(dashboard?.devices ?? []).map((device) => (
+              <button key={device.id} className="compact-item" type="button">
+                <span>{device.displayName}</span>
+                <small>{device.status}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'releases' && (
+        <section className="line-panel compact-panel">
+          <div className="compact-list">
+            {(dashboard?.releases ?? []).map((release) => (
+              <button key={release.id} className="compact-item" type="button">
+                <span>{release.version}</span>
+                <small>{release.isActive ? 'live' : 'off'}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="line-panel compact-panel">
+        <div className="button-row compact-row">
+          <button className="gold-action" onClick={() => activeTicket && onUpdateTicket('en-remoto')} disabled={!activeTicket}>Live</button>
+          <button className="line-action" onClick={() => activeTicket && onUpdateTicket('esperando')} disabled={!activeTicket}>Hold</button>
+          <button className="line-action" onClick={() => activeTicket && onUpdateTicket('cerrado')} disabled={!activeTicket}>Close</button>
+        </div>
+        <div className="compact-meta">
+          <span>{activeTicket?.id ?? '-'}</span>
+          <span>{selectedDevice?.displayName ?? '-'}</span>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MinimalClientPanel({
+  dashboard,
+  activeTab,
+  issue,
+  setIssue,
+  diagnostic,
+  remoteSession,
+  agentStatus,
+  agentResult,
+  updateResult,
+  onRunDiagnostic,
+  onCreateTicket,
+  onOpenRemote,
+  onCheckUpdates,
+  onAgentAction
+}: {
+  dashboard: ClientDashboard | null;
+  activeTab: ClientTab;
+  issue: string;
+  setIssue: (value: string) => void;
+  diagnostic: DiagnosticReport | null;
+  remoteSession: RemoteSession | null;
+  agentStatus: AgentStatus | null;
+  agentResult: AgentActionResult | null;
+  updateResult: UpdateResult | null;
+  onRunDiagnostic: () => void;
+  onCreateTicket: () => void;
+  onOpenRemote: () => void;
+  onCheckUpdates: () => void;
+  onAgentAction: (actionId: string) => void;
+}) {
+  const latestTicket = dashboard?.tickets[0];
+  const latestDiagnostic = dashboard?.diagnostics[0];
+  const release = dashboard?.latestRelease ?? null;
+  const latestDiagnosticPayload = latestDiagnostic?.payload as Partial<DiagnosticReport> | undefined;
+  const thermalReport = diagnostic ?? latestDiagnosticPayload ?? null;
+  const thermalLabel = thermalReport?.maxTemperatureC ?? null;
+
+  return (
+    <div className="single-column">
+      {activeTab === 'overview' && (
+        <section className="line-panel compact-panel">
+          <div className="compact-list">
+            <div className="compact-item static"><span>{dashboard?.device.displayName ?? '-'}</span><small>{dashboard?.device.status ?? '-'}</small></div>
+            <div className="compact-item static"><span>{latestTicket?.id ?? '-'}</span><small>{release?.version ?? '-'}</small></div>
+            <div className="compact-item static"><span>{thermalLabel != null ? `${thermalLabel.toFixed(1)}°` : '-'}</span><small>{updateResult?.status ?? '-'}</small></div>
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'ticket' && (
+        <section className="line-panel compact-panel">
+          <textarea value={issue} onChange={(event) => setIssue(event.target.value)} placeholder="issue" />
+          <div className="button-row compact-row">
+            <button className="gold-action" onClick={onCreateTicket}>Ticket</button>
+            <button className="line-action" onClick={onCheckUpdates}>Update</button>
+            <button className="line-action" onClick={onOpenRemote}>Remote</button>
+          </div>
+          <div className="compact-meta">
+            <span>{remoteSession?.code ?? latestTicket?.remoteCode ?? '-'}</span>
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'maintenance' && (
+        <section className="line-panel compact-panel">
+          <div className="button-row compact-grid">
+            <button className="matrix-action" onClick={() => onAgentAction('temp_scan')}>Temp</button>
+            <button className="matrix-action" onClick={() => onAgentAction('startup_review')}>Start</button>
+            <button className="matrix-action" onClick={() => onAgentAction('windows_update')}>Win</button>
+            <button className="matrix-action" onClick={() => onAgentAction('defender_status')}>Def</button>
+            <button className="matrix-action" onClick={() => onAgentAction('thermal_status')}>Therm</button>
+          </div>
+          <div className="compact-meta">
+            <span>{agentStatus?.mode ?? '-'}</span>
+            <span>{agentResult?.message ?? '-'}</span>
+          </div>
+        </section>
+      )}
+    </div>
   );
 }
 
