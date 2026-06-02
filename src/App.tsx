@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import {
   Bell,
@@ -39,6 +39,23 @@ type QuickCheckItem = {
   label: string;
   value: string;
   tone: 'ok' | 'warn' | 'danger' | 'neutral';
+};
+
+type HealthSummary = {
+  version: string;
+  lastDiagnostic: string;
+  machine: string;
+  cpu: string;
+  cpuTone: 'ok' | 'warn' | 'neutral' | 'danger';
+  temp: string;
+  tempTone: 'ok' | 'warn' | 'neutral' | 'danger';
+  ram: string;
+  ramTone: 'ok' | 'warn' | 'neutral' | 'danger';
+  disk: string;
+  diskTone: 'ok' | 'warn' | 'neutral' | 'danger';
+  security: string;
+  securityTone: 'ok' | 'warn' | 'neutral' | 'danger';
+  stability: string;
 };
 
 function getAppView(): AppView {
@@ -445,61 +462,75 @@ function ClientApp() {
     }
   }
 
-  const status = useMemo(() => {
-    const latestDiagnostic = clientDashboard?.diagnostics[0];
+  const latestDiagnostic = clientDashboard?.diagnostics[0] ?? null;
+  const healthReport = quickDiagnostic ?? diagnostic ?? null;
+  const healthSummary = useMemo<HealthSummary>(() => {
+    const report = healthReport;
+    const cpuTemp = report?.maxTemperatureC ?? null;
+    const ramUsed = report ? Math.max(0, report.ramTotalGb - report.ramFreeGb) : null;
+    const ramUsage = report && report.ramTotalGb > 0 && ramUsed != null ? Math.round((ramUsed / report.ramTotalGb) * 100) : null;
+    const diskUsage = report && report.systemDriveTotalGb > 0
+      ? Math.round(((report.systemDriveTotalGb - report.systemDriveFreeGb) / report.systemDriveTotalGb) * 100)
+      : null;
+
     return {
       version: APP_VERSION,
-      lastDiagnostic: latestDiagnostic?.generatedAt ?? 'Sin revisión'
+      lastDiagnostic: latestDiagnostic?.generatedAt ?? 'Sin revisión',
+      machine: report?.computerName ?? session?.displayName ?? 'Equipo activo',
+      cpu: report?.cpu ?? 'Sin dato',
+      cpuTone: report?.cpu ? 'ok' : 'neutral',
+      temp: cpuTemp == null ? 'Pendiente' : `${cpuTemp.toFixed(1)} °C`,
+      tempTone: cpuTemp == null ? 'neutral' : cpuTemp >= 85 ? 'danger' : cpuTemp >= 70 ? 'warn' : 'ok',
+      ram: report && ramUsed != null ? `${ramUsed.toFixed(1)} GB usados · ${ramUsage ?? 0}%` : 'Sin dato',
+      ramTone: ramUsage == null ? 'neutral' : ramUsage >= 90 ? 'danger' : ramUsage >= 75 ? 'warn' : 'ok',
+      disk: report ? `${report.systemDriveFreeGb.toFixed(0)} GB libres · ${diskUsage ?? 0}% usado` : 'Sin dato',
+      diskTone: diskUsage == null ? 'neutral' : diskUsage >= 90 ? 'danger' : diskUsage >= 80 ? 'warn' : 'ok',
+      security: report?.defenderStatus ?? 'Pendiente',
+      securityTone: report?.defenderStatus?.toLowerCase().includes('desactiv') ? 'danger' : report?.defenderStatus ? 'ok' : 'neutral',
+      stability: report?.pendingReboot ? 'Reinicio pendiente' : report ? 'Sin alertas críticas' : 'Esperando diagnóstico'
     };
-  }, [clientDashboard?.diagnostics, clientDashboard?.tickets, remoteSession, session]);
+  }, [healthReport, latestDiagnostic, session?.displayName]);
 
   const quickChecks = useMemo<QuickCheckItem[]>(() => {
-    const report = quickDiagnostic ?? diagnostic ?? null;
-    const cpuTemp = report?.maxTemperatureC ?? null;
-    const memoryLoad = report ? Math.round(((report.ramTotalGb - report.ramFreeGb) / report.ramTotalGb) * 100) : null;
-    const diskFree = report?.systemDriveFreeGb ?? null;
-    const defender = report?.defenderStatus ?? null;
-    const connectivity = remoteSession || clientDashboard ? 'OK' : 'Pendiente';
-
     return [
       {
         id: 'cpu',
         label: 'CPU',
-        value: cpuTemp == null ? 'Sin dato' : cpuTemp >= 85 ? 'Crítico' : cpuTemp >= 70 ? 'Atención' : 'OK',
-        tone: cpuTemp == null ? 'neutral' : cpuTemp >= 85 ? 'danger' : cpuTemp >= 70 ? 'warn' : 'ok'
-      },
-      {
-        id: 'ram',
-        label: 'RAM',
-        value: memoryLoad == null ? 'Sin dato' : memoryLoad >= 90 ? 'Crítico' : memoryLoad >= 75 ? 'Atención' : 'OK',
-        tone: memoryLoad == null ? 'neutral' : memoryLoad >= 90 ? 'danger' : memoryLoad >= 75 ? 'warn' : 'ok'
-      },
-      {
-        id: 'disk',
-        label: 'Disco',
-        value: diskFree == null ? 'Sin dato' : diskFree < 50 ? 'Atención' : 'OK',
-        tone: diskFree == null ? 'neutral' : diskFree < 50 ? 'warn' : 'ok'
+        value: healthSummary.cpu,
+        tone: healthSummary.cpuTone
       },
       {
         id: 'temp',
         label: 'Temperatura',
-        value: cpuTemp == null ? 'Pendiente' : `${cpuTemp.toFixed(1)} °C`,
-        tone: cpuTemp == null ? 'neutral' : cpuTemp >= 85 ? 'danger' : cpuTemp >= 70 ? 'warn' : 'ok'
+        value: healthSummary.temp,
+        tone: healthSummary.tempTone
+      },
+      {
+        id: 'ram',
+        label: 'RAM',
+        value: healthSummary.ram,
+        tone: healthSummary.ramTone
+      },
+      {
+        id: 'disk',
+        label: 'Disco',
+        value: healthSummary.disk,
+        tone: healthSummary.diskTone
       },
       {
         id: 'defender',
         label: 'Seguridad',
-        value: defender ?? 'Pendiente',
-        tone: defender?.toLowerCase().includes('desactiv') ? 'danger' : defender ? 'ok' : 'neutral'
+        value: healthSummary.security,
+        tone: healthSummary.securityTone
       },
       {
-        id: 'network',
-        label: 'Red',
-        value: connectivity,
-        tone: remoteSession || clientDashboard ? 'ok' : 'neutral'
+        id: 'stability',
+        label: 'Estado',
+        value: healthSummary.stability,
+        tone: healthSummary.stability.includes('Reinicio') ? 'warn' : healthReport ? 'ok' : 'neutral'
       }
     ];
-  }, [clientDashboard, diagnostic, quickDiagnostic, remoteSession]);
+  }, [healthReport, healthSummary]);
 
   if (booting) {
     return (
@@ -537,8 +568,8 @@ function ClientApp() {
         </div>
 
         <div className="status-strip">
-          <StatusItem label="Versión" value={`v${status.version}`} tone="neutral" />
-          <StatusItem label="Última revisión" value={status.lastDiagnostic} tone="neutral" />
+          <StatusItem label="Versión" value={`v${healthSummary.version}`} tone="neutral" />
+          <StatusItem label="Última revisión" value={healthSummary.lastDiagnostic} tone="neutral" />
         </div>
 
         <div className="header-actions">
@@ -556,63 +587,60 @@ function ClientApp() {
 
       <section className="dashboard-grid">
         <SystemStatusPanel
-          session={session}
-          status={status}
+          status={healthSummary}
           updateResult={updateResult}
           isUpdating={isUpdating}
           updateProgress={updateProgress}
           onUpdateInstall={handleNativeUpdateInstall}
         />
 
-        <section className="workspace-grid">
-          <HomeDashboard
-            activeSection={activeSection}
-            onSelectSection={setActiveSection}
-            onOpenRemote={handleRequestRemoteSupport}
-            onCreateTicket={() => {
-              setShowTicketForm(true);
-              setActiveSection('ticket');
-            }}
-            onQuickDiagnostic={handleRunQuickDiagnostic}
-            onAdvancedDiagnostic={handleRunAdvancedDiagnostic}
-            onOpenCleaner={() => setActiveSection('cleaner')}
-            showTicketForm={showTicketForm}
-          />
+        <HomeDashboard
+          activeSection={activeSection}
+          onSelectSection={setActiveSection}
+          onOpenRemote={handleRequestRemoteSupport}
+          onCreateTicket={() => {
+            setShowTicketForm(true);
+            setActiveSection('ticket');
+          }}
+          onQuickDiagnostic={handleRunQuickDiagnostic}
+          onAdvancedDiagnostic={handleRunAdvancedDiagnostic}
+          onOpenCleaner={() => setActiveSection('cleaner')}
+          showTicketForm={showTicketForm}
+        />
 
-          <DetailPanel
-            activeSection={activeSection}
-            session={session}
-            clientDashboard={clientDashboard}
-            remoteSession={remoteSession}
-            ticketIssue={ticketIssue}
-            setTicketIssue={setTicketIssue}
-            ticketCategory={ticketCategory}
-            setTicketCategory={setTicketCategory}
-            ticketUrgency={ticketUrgency}
-            setTicketUrgency={setTicketUrgency}
-            ticketDescription={ticketDescription}
-            setTicketDescription={setTicketDescription}
-            showTicketForm={showTicketForm}
-            setShowTicketForm={setShowTicketForm}
-            quickChecks={quickChecks}
-            quickDiagnostic={quickDiagnostic ?? diagnostic}
-            advancedDiagnostic={advancedDiagnostic}
-            cleanerSelection={cleanerSelection}
-            setCleanerSelection={setCleanerSelection}
-            isBusy={isBusy}
-            onRequestRemoteSupport={handleRequestRemoteSupport}
-            onCreateTicket={handleCreateTicket}
-            onRunQuickDiagnostic={handleRunQuickDiagnostic}
-            onRunAdvancedDiagnostic={handleRunAdvancedDiagnostic}
-            onCleanerAnalyze={handleCleanerAnalyze}
-            onCleanerRun={handleCleanerRun}
-            onOpenRemote={handleOpenRemote}
-            onGoHome={() => {
-              setShowTicketForm(false);
-              setActiveSection('quick');
-            }}
-          />
-        </section>
+        <DetailPanel
+          activeSection={activeSection}
+          session={session}
+          clientDashboard={clientDashboard}
+          remoteSession={remoteSession}
+          ticketIssue={ticketIssue}
+          setTicketIssue={setTicketIssue}
+          ticketCategory={ticketCategory}
+          setTicketCategory={setTicketCategory}
+          ticketUrgency={ticketUrgency}
+          setTicketUrgency={setTicketUrgency}
+          ticketDescription={ticketDescription}
+          setTicketDescription={setTicketDescription}
+          showTicketForm={showTicketForm}
+          setShowTicketForm={setShowTicketForm}
+          quickChecks={quickChecks}
+          quickDiagnostic={quickDiagnostic ?? diagnostic}
+          advancedDiagnostic={advancedDiagnostic}
+          cleanerSelection={cleanerSelection}
+          setCleanerSelection={setCleanerSelection}
+          isBusy={isBusy}
+          onRequestRemoteSupport={handleRequestRemoteSupport}
+          onCreateTicket={handleCreateTicket}
+          onRunQuickDiagnostic={handleRunQuickDiagnostic}
+          onRunAdvancedDiagnostic={handleRunAdvancedDiagnostic}
+          onCleanerAnalyze={handleCleanerAnalyze}
+          onCleanerRun={handleCleanerRun}
+          onOpenRemote={handleOpenRemote}
+          onGoHome={() => {
+            setShowTicketForm(false);
+            setActiveSection('quick');
+          }}
+        />
       </section>
 
       {toast && <ToastBar toast={toast} />}
@@ -913,15 +941,28 @@ function AdminApp() {
 }
 
 function SystemStatusPanel({
-  session,
   status,
   updateResult,
   isUpdating,
   updateProgress,
   onUpdateInstall
 }: {
-  session: AppSession | null;
-  status: { version: string; lastDiagnostic: string };
+  status: {
+    version: string;
+    lastDiagnostic: string;
+    machine: string;
+    cpu: string;
+    cpuTone: 'ok' | 'warn' | 'neutral' | 'danger';
+    temp: string;
+    tempTone: 'ok' | 'warn' | 'neutral' | 'danger';
+    ram: string;
+    ramTone: 'ok' | 'warn' | 'neutral' | 'danger';
+    disk: string;
+    diskTone: 'ok' | 'warn' | 'neutral' | 'danger';
+    security: string;
+    securityTone: 'ok' | 'warn' | 'neutral' | 'danger';
+    stability: string;
+  };
   updateResult: UpdateResult | null;
   isUpdating: boolean;
   updateProgress: string;
@@ -932,19 +973,21 @@ function SystemStatusPanel({
       <div className="section-head">
         <div>
           <p className="eyebrow">Estado del equipo</p>
-          <h2>PC y salud</h2>
+          <h2>Salud de la PC</h2>
         </div>
-        <span className="pill">{session ? 'Activa' : 'Sin sesión'}</span>
+        <span className="pill">{status.machine}</span>
       </div>
       <div className="status-matrix">
-        <Metric label="Equipo" value={session?.displayName ?? 'Sin sesión'} />
-        <Metric label="Última revisión" value={status.lastDiagnostic} />
-        <Metric label="Versión" value={`v${status.version}`} />
-        <Metric label="Sesión" value={session ? 'Guardada' : 'No iniciada'} />
+        <Metric label="CPU" value={status.cpu} tone={status.cpuTone} />
+        <Metric label="Temperatura" value={status.temp} tone={status.tempTone} />
+        <Metric label="RAM" value={status.ram} tone={status.ramTone} />
+        <Metric label="Disco" value={status.disk} tone={status.diskTone} />
+        <Metric label="Seguridad" value={status.security} tone={status.securityTone} />
+        <Metric label="Estado" value={status.stability} tone="neutral" />
       </div>
       <div className="status-note">
         <ShieldCheck size={16} />
-        <span>{session ? 'Sin problemas críticos' : 'Esperando inicio de sesión del cliente.'}</span>
+        <span>Última revisión: {status.lastDiagnostic}</span>
       </div>
       {updateResult?.status === 'available' && (
         <div className="update-banner">
@@ -1130,7 +1173,7 @@ function DetailPanel({
     <section className="panel detail-panel">
       <div className="section-head">
         <div>
-          <p className="eyebrow">Detalle</p>
+          <p className="eyebrow">Acción activa</p>
           <h2>
             {activeSection === 'remote' && 'Soporte remoto'}
             {activeSection === 'ticket' && 'Crear ticket'}
@@ -1349,9 +1392,9 @@ function StatusItem({ label, value, tone }: { label: string; value: string; tone
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, tone = 'neutral' }: { label: string; value: string; tone?: 'ok' | 'warn' | 'neutral' | 'danger' }) {
   return (
-    <div className="metric">
+    <div className={`metric metric-${tone}`}>
       <span>{label}</span>
       <strong>{value}</strong>
     </div>

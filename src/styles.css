@@ -223,13 +223,6 @@ button { color: inherit; }
   margin-top: 16px;
 }
 
-.workspace-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.92fr);
-  gap: 16px;
-  align-items: start;
-}
-
 .admin-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
@@ -276,7 +269,7 @@ button { color: inherit; }
 
 .status-matrix {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -286,6 +279,8 @@ button { color: inherit; }
 
 .metric {
   padding: 12px 14px;
+  border: 1px solid rgba(241,240,232,.1);
+  background: rgba(4,5,5,.42);
 }
 
 .metric strong {
@@ -294,6 +289,11 @@ button { color: inherit; }
   font-size: 16px;
   font-weight: 600;
 }
+
+.metric-ok strong { color: var(--ok); }
+.metric-warn strong { color: var(--warn); }
+.metric-danger strong { color: var(--danger); }
+.metric-neutral strong { color: var(--ink); }
 
 .status-note,
 .update-banner,
@@ -621,7 +621,6 @@ button { color: inherit; }
 @media (max-width: 1200px) {
   .shell-header,
   .dashboard-grid,
-  .workspace-grid,
   .admin-grid {
     grid-template-columns: 1fr;
   }
