@@ -576,9 +576,6 @@ function ClientApp() {
           <button className="btn btn-ghost" onClick={handleRefresh} disabled={isBusy || isUpdating}>
             <RefreshCw size={16} /> Actualizar
           </button>
-          <button className="btn btn-ghost btn-quiet" onClick={handleOpenAdminPanel}>
-            Interno
-          </button>
           <button className="btn btn-ghost btn-quiet" onClick={handleSignOut}>
             Salir
           </button>
@@ -658,6 +655,7 @@ function AdminApp() {
   const [updateProgress, setUpdateProgress] = useState('');
   const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
   const [email, setEmail] = useState('admin@underdock.local');
+  const [orgName, setOrgName] = useState('UnderDock Demo');
   const [password, setPassword] = useState('');
   const [generatedCode, setGeneratedCode] = useState<PairingCodeRecord | null>(null);
 
@@ -699,7 +697,7 @@ function AdminApp() {
     event.preventDefault();
     setIsBusy(true);
     try {
-      const result = await appBackend.signInAdmin(email.trim(), password);
+      const result = await appBackend.signInAdmin(email.trim(), password, orgName.trim());
       setSession(result.session);
       setPassword('');
       notify('Panel admin activado.', 'ok');
@@ -806,6 +804,10 @@ function AdminApp() {
               <input value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" />
             </label>
             <label>
+              <span>Equipo</span>
+              <input value={orgName} onChange={(event) => setOrgName(event.target.value)} autoComplete="organization" />
+            </label>
+            <label>
               <span>Contraseña</span>
               <input
                 type="password"
@@ -854,6 +856,7 @@ function AdminApp() {
 
         <div className="status-strip">
           <StatusItem label="Sesión" value={session.email ?? 'Admin'} tone="neutral" />
+          <StatusItem label="Equipo" value={session.orgName ?? 'Sin equipo'} tone="neutral" />
           <StatusItem label="Versión" value={`v${APP_VERSION}`} tone="neutral" />
           <StatusItem label="Equipos" value={`${counts.devices}`} tone="neutral" />
         </div>

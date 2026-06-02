@@ -48,7 +48,7 @@ type BackendBase = {
   configured: boolean;
   description: string;
   bootstrap(): Promise<StoredSession>;
-  signInAdmin(email: string, password: string): Promise<SignInResult>;
+  signInAdmin(email: string, password: string, orgName: string): Promise<SignInResult>;
   signOut(): Promise<void>;
   signOutAdmin(): Promise<void>;
   generatePairingCode(): Promise<PairingCodeRecord>;
@@ -271,8 +271,8 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
 
       return null;
     },
-    async signInAdmin(email, password) {
-      if (email !== config.localAdminEmail || password !== config.localAdminPassword) {
+    async signInAdmin(email, password, orgName) {
+      if (email !== config.localAdminEmail || password !== config.localAdminPassword || orgName !== config.localAdminOrg) {
         throw new Error('Credenciales invalidas para el panel admin local.');
       }
 
@@ -504,7 +504,7 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
         async bootstrap() {
           return null;
         },
-        async signInAdmin() {
+        async signInAdmin(_email, _password, _orgName) {
           throw new Error('Supabase no esta configurado.');
         },
         async signOut() {
@@ -637,7 +637,7 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
     configured: true,
     description: 'Backend Supabase conectado para tickets, login y realtime.',
     bootstrap,
-    async signInAdmin(email, password) {
+    async signInAdmin(email, password, orgName) {
       const auth = await request<{ access_token: string; refresh_token: string; user: { id: string; email: string } }>(
         '/auth/v1/token?grant_type=password',
         {
@@ -649,6 +649,9 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
       const profile = await single<AdminProfile>('admin_users', { user_id: `eq.${auth.user.id}` }, auth.access_token);
       if (!profile) {
         throw new Error('El usuario autenticado no figura como admin en la base.');
+      }
+      if (orgName && profile.orgName && orgName.trim() !== profile.orgName.trim()) {
+        throw new Error('El equipo indicado no coincide con tu perfil admin.');
       }
 
       const session: AppSession = {
