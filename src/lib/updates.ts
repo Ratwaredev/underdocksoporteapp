@@ -12,7 +12,7 @@ export async function checkForUpdates(): Promise<UpdateResult> {
   if (!isTauriRuntime()) {
     return {
       status: 'unconfigured',
-      currentVersion: '0.1.12-dev',
+      currentVersion: '0.1.13-dev',
       notes: 'Modo navegador: el updater real funciona dentro del build Tauri.'
     };
   }
@@ -31,14 +31,16 @@ export async function checkForUpdates(): Promise<UpdateResult> {
 
     return {
       status: 'current',
-      currentVersion: '0.1.12',
+      currentVersion: '0.1.13',
       notes: 'La app está actualizada.'
     };
   } catch (error) {
+    console.error('Updater check failed:', error);
+    const message = error instanceof Error ? error.message : 'Error desconocido.';
     return {
       status: 'error',
-      currentVersion: '0.1.12',
-      notes: error instanceof Error ? error.message : 'No se pudo comprobar actualizaciones.'
+      currentVersion: '0.1.13',
+      notes: `No se pudo comprobar actualizaciones: ${message}`
     };
   }
 }
@@ -47,7 +49,7 @@ export async function installLatestUpdate(onProgress?: (progress: string) => voi
   if (!isTauriRuntime()) {
     return {
       status: 'unconfigured',
-      currentVersion: '0.1.12-dev',
+      currentVersion: '0.1.13-dev',
       notes: 'Modo navegador: el updater real funciona dentro del build Tauri.'
     };
   }
@@ -58,7 +60,7 @@ export async function installLatestUpdate(onProgress?: (progress: string) => voi
     if (!update) {
       return {
         status: 'current',
-        currentVersion: '0.1.12',
+        currentVersion: '0.1.13',
         notes: 'La app ya estaba actualizada.'
       };
     }
@@ -97,10 +99,12 @@ export async function installLatestUpdate(onProgress?: (progress: string) => voi
       notes: update.body || 'Actualización instalada. Reiniciando...'
     };
   } catch (error) {
+    console.error('Updater install failed:', error);
+    const message = error instanceof Error ? error.message : 'Error desconocido.';
     return {
       status: 'error',
-      currentVersion: '0.1.12',
-      notes: error instanceof Error ? error.message : 'No se pudo instalar la actualización.'
+      currentVersion: '0.1.13',
+      notes: `No se pudo instalar la actualización: ${message}`
     };
   }
 }
