@@ -201,7 +201,7 @@ function getRuntimeConfig(): RuntimeConfig {
   const localAdminOrg = import.meta.env.VITE_LOCAL_ADMIN_ORG?.trim() || 'UnderDock Demo';
 
   return {
-    backendKind: supabaseUrl && supabaseAnonKey ? 'supabase' : 'local',
+    backendKind: supabaseUrl && supabaseAnonKey ? 'supabase' : (import.meta.env.PROD ? 'supabase' : 'local'),
     supabaseUrl,
     supabaseAnonKey,
     defaultOrgName,
@@ -445,6 +445,57 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
 
 function createSupabaseBackend(config: RuntimeConfig): BackendBase {
   if (!config.supabaseUrl || !config.supabaseAnonKey) {
+    if (import.meta.env.PROD) {
+      return {
+        kind: 'supabase',
+        configured: false,
+        description: 'Supabase no esta configurado para esta build.',
+        async bootstrap() {
+          return null;
+        },
+        async signInAdmin() {
+          throw new Error('Supabase no esta configurado.');
+        },
+        async signOut() {
+          return;
+        },
+        async generatePairingCode() {
+          throw new Error('Supabase no esta configurado.');
+        },
+        async registerClient() {
+          throw new Error('Supabase no esta configurado.');
+        },
+        async getAdminDashboard() {
+          throw new Error('Supabase no esta configurado.');
+        },
+        async getClientDashboard() {
+          throw new Error('Supabase no esta configurado.');
+        },
+        async createTicket() {
+          throw new Error('Supabase no esta configurado.');
+        },
+        async saveDiagnostic() {
+          throw new Error('Supabase no esta configurado.');
+        },
+        async createRemoteSession() {
+          throw new Error('Supabase no esta configurado.');
+        },
+        async updateTicketStatus() {
+          throw new Error('Supabase no esta configurado.');
+        },
+        async listReleases() {
+          return [];
+        },
+        async checkForUpdates(currentVersion) {
+          return {
+            status: 'unconfigured',
+            currentVersion,
+            notes: 'Supabase no esta configurado en esta build.'
+          };
+        }
+      };
+    }
+
     return createLocalBackend(config);
   }
 

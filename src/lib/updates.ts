@@ -1,4 +1,4 @@
-import { check } from '@tauri-apps/plugin-updater';
+import { check, type DownloadEvent } from '@tauri-apps/plugin-updater';
 import { isTauriRuntime } from './tauri';
 
 export type UpdateResult = {
@@ -12,7 +12,7 @@ export async function checkForUpdates(): Promise<UpdateResult> {
   if (!isTauriRuntime()) {
     return {
       status: 'unconfigured',
-      currentVersion: '0.1.4-dev',
+      currentVersion: '0.1.5-dev',
       notes: 'Modo navegador: el updater real funciona dentro del build Tauri.'
     };
   }
@@ -31,23 +31,23 @@ export async function checkForUpdates(): Promise<UpdateResult> {
 
     return {
       status: 'current',
-      currentVersion: '0.1.4',
+      currentVersion: '0.1.5',
       notes: 'La app está actualizada.'
     };
   } catch (error) {
     return {
       status: 'error',
-      currentVersion: '0.1.4',
+      currentVersion: '0.1.5',
       notes: error instanceof Error ? error.message : 'No se pudo comprobar actualizaciones.'
     };
   }
 }
 
-export async function installLatestUpdate(): Promise<UpdateResult> {
+export async function installLatestUpdate(onProgress?: (progress: string) => void): Promise<UpdateResult> {
   if (!isTauriRuntime()) {
     return {
       status: 'unconfigured',
-      currentVersion: '0.1.4-dev',
+      currentVersion: '0.1.5-dev',
       notes: 'Modo navegador: el updater real funciona dentro del build Tauri.'
     };
   }
@@ -58,12 +58,37 @@ export async function installLatestUpdate(): Promise<UpdateResult> {
     if (!update) {
       return {
         status: 'current',
-        currentVersion: '0.1.4',
+        currentVersion: '0.1.5',
         notes: 'La app ya estaba actualizada.'
       };
     }
 
-    await update.downloadAndInstall();
+    let totalBytes = 0;
+    let downloadedBytes = 0;
+
+    await update.downloadAndInstall((event: DownloadEvent) => {
+      if (event.event === 'Started') {
+        totalBytes = event.data.contentLength ?? 0;
+        downloadedBytes = 0;
+        onProgress?.('0%');
+        return;
+      }
+
+      if (event.event === 'Progress') {
+        downloadedBytes += event.data.chunkLength;
+        if (totalBytes > 0) {
+          const percent = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100));
+          onProgress?.(`${percent}%`);
+        } else {
+          onProgress?.('Descargando');
+        }
+        return;
+      }
+
+      if (event.event === 'Finished') {
+        onProgress?.('Instalando');
+      }
+    });
 
     return {
       status: 'available',
@@ -74,7 +99,7 @@ export async function installLatestUpdate(): Promise<UpdateResult> {
   } catch (error) {
     return {
       status: 'error',
-      currentVersion: '0.1.4',
+      currentVersion: '0.1.5',
       notes: error instanceof Error ? error.message : 'No se pudo instalar la actualizacion.'
     };
   }

@@ -61,6 +61,8 @@ function App() {
   const [diagnostic, setDiagnostic] = useState<DiagnosticReport | null>(null);
   const [remoteSession, setRemoteSession] = useState<RemoteSession | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState('');
   const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [agentResult, setAgentResult] = useState<AgentActionResult | null>(null);
@@ -164,7 +166,26 @@ function App() {
 
     (async () => {
       const result = await checkNativeUpdates();
-      if (alive) setUpdateResult(result);
+      if (!alive) return;
+      setUpdateResult(result);
+
+      if (result.status !== 'available') return;
+
+      try {
+        setIsUpdating(true);
+        setUpdateProgress('0%');
+        const installed = await installNativeUpdate((progress) => {
+          if (alive) setUpdateProgress(progress);
+        });
+        if (alive) {
+          setUpdateResult(installed);
+        }
+      } finally {
+        if (alive) {
+          setIsUpdating(false);
+          setUpdateProgress('');
+        }
+      }
     })();
 
     return () => {
@@ -446,15 +467,16 @@ function App() {
   }
 
   async function handleNativeUpdateInstall() {
-    setIsBusy(true);
+    setIsUpdating(true);
     try {
-      const result = await installNativeUpdate();
+      const result = await installNativeUpdate((progress) => setUpdateProgress(progress));
       setUpdateResult(result);
       notify(result.notes, result.status === 'available' ? 'warn' : 'ok');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'No se pudo instalar la actualizacion.', 'danger');
     } finally {
-      setIsBusy(false);
+      setIsUpdating(false);
+      setUpdateProgress('');
     }
   }
 
@@ -506,6 +528,7 @@ function App() {
             <p>Preparando autentificacion, diagnostico y soporte remoto.</p>
           </div>
         </section>
+        <VersionBadge />
       </main>
     );
   }
@@ -528,8 +551,9 @@ function App() {
           {updateResult?.status === 'available' && (
             <section className="line-panel auth-update-banner">
               <h3>{updateResult.nextVersion}</h3>
-              <button className="gold-action full" onClick={handleNativeUpdateInstall} disabled={isBusy}>
-                <ArrowDownToLine size={14} /> Update
+              <p>{isUpdating ? (updateProgress || 'Updating') : 'Ready'}</p>
+              <button className="gold-action full" onClick={handleNativeUpdateInstall} disabled={isBusy || isUpdating}>
+                <ArrowDownToLine size={14} /> {isUpdating ? (updateProgress || 'Updating') : 'Update'}
               </button>
             </section>
           )}
@@ -579,6 +603,7 @@ function App() {
         {toast && (
           <ToastBar toast={toast} />
         )}
+        <VersionBadge />
       </main>
     );
   }
@@ -693,7 +718,16 @@ function App() {
       </section>
 
       {toast && <ToastBar toast={toast} />}
+      <VersionBadge />
     </main>
+  );
+}
+
+function VersionBadge() {
+  return (
+    <div className="version-badge" aria-label={`Version ${APP_VERSION}`}>
+      v{APP_VERSION}
+    </div>
   );
 }
 
