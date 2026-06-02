@@ -12,7 +12,7 @@ export async function checkForUpdates(): Promise<UpdateResult> {
   if (!isTauriRuntime()) {
     return {
       status: 'unconfigured',
-      currentVersion: '0.1.10-dev',
+      currentVersion: '0.1.11-dev',
       notes: 'Modo navegador: el updater real funciona dentro del build Tauri.'
     };
   }
@@ -25,19 +25,19 @@ export async function checkForUpdates(): Promise<UpdateResult> {
         status: 'available',
         currentVersion: update.currentVersion,
         nextVersion: update.version,
-        notes: update.body || 'Hay una versión nueva disponible.'
+        notes: update.body || 'Hay una versiÃ³n nueva disponible.'
       };
     }
 
     return {
       status: 'current',
-      currentVersion: '0.1.10',
-      notes: 'La app está actualizada.'
+      currentVersion: '0.1.11',
+      notes: 'La app estÃ¡ actualizada.'
     };
   } catch (error) {
     return {
       status: 'error',
-      currentVersion: '0.1.10',
+      currentVersion: '0.1.11',
       notes: error instanceof Error ? error.message : 'No se pudo comprobar actualizaciones.'
     };
   }
@@ -47,7 +47,7 @@ export async function installLatestUpdate(onProgress?: (progress: string) => voi
   if (!isTauriRuntime()) {
     return {
       status: 'unconfigured',
-      currentVersion: '0.1.10-dev',
+      currentVersion: '0.1.11-dev',
       notes: 'Modo navegador: el updater real funciona dentro del build Tauri.'
     };
   }
@@ -58,7 +58,7 @@ export async function installLatestUpdate(onProgress?: (progress: string) => voi
     if (!update) {
       return {
         status: 'current',
-        currentVersion: '0.1.10',
+        currentVersion: '0.1.11',
         notes: 'La app ya estaba actualizada.'
       };
     }
@@ -99,7 +99,7 @@ export async function installLatestUpdate(onProgress?: (progress: string) => voi
   } catch (error) {
     return {
       status: 'error',
-      currentVersion: '0.1.10',
+      currentVersion: '0.1.11',
       notes: error instanceof Error ? error.message : 'No se pudo instalar la actualizacion.'
     };
   }
