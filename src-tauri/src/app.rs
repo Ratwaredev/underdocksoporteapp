@@ -1,8 +1,18 @@
 #[cfg(not(target_os = "windows"))]
 use chrono::Utc;
+use reqwest::blocking::Client;
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, process::Command};
+use semver::Version;
+use std::{
+    collections::HashMap,
+    fs,
+    io::Write,
+    path::PathBuf,
+    process::Command,
+    thread,
+    time::Duration,
+};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,6 +68,32 @@ struct AgentActionResult {
     ok: bool,
     message: String,
     details: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteUpdatePlatform {
+    signature: String,
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteUpdateManifest {
+    version: String,
+    notes: Option<String>,
+    pub_date: Option<String>,
+    platforms: HashMap<String, RemoteUpdatePlatform>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteUpdateResult {
+    status: String,
+    current_version: String,
+    next_version: Option<String>,
+    notes: String,
+    download_url: Option<String>,
 }
 
 #[tauri::command]
@@ -203,6 +239,185 @@ fn open_remote_tool() -> Result<String, String> {
     {
         Ok("La integración remota del MVP busca RustDesk en Windows. En otros sistemas hay que configurar el binario equivalente.".to_string())
     }
+}
+
+fn update_manifest_url() -> &'static str {
+    "https://github.com/Ratwaredev/underdocksoporteapp/releases/latest/download/latest.json"
+}
+
+fn update_client() -> Result<Client, String> {
+    Client::builder()
+        .timeout(Duration::from_secs(20))
+        .user_agent(format!("UnderDock/{}", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|err| format!("No se pudo preparar el cliente de actualizaciones: {err}"))
+}
+
+fn normalize_version(version: &str) -> String {
+    version.trim().trim_start_matches('v').to_string()
+}
+
+fn parse_version(version: &str) -> Result<Version, String> {
+    Version::parse(&normalize_version(version))
+        .map_err(|err| format!("No se pudo interpretar la versión '{version}': {err}"))
+}
+
+fn choose_platform<'a>(
+    platforms: &'a HashMap<String, RemoteUpdatePlatform>,
+) -> Option<(&'a str, &'a RemoteUpdatePlatform)> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(exe) = std::env::current_exe() {
+            let exe_path = exe.to_string_lossy().to_lowercase();
+            if (exe_path.contains("\\program files") || exe_path.contains("\\program files (x86)"))
+                && platforms.contains_key("windows-x86_64-msi")
+            {
+                if let Some(platform) = platforms.get("windows-x86_64-msi") {
+                    return Some(("windows-x86_64-msi", platform));
+                }
+            }
+        }
+
+        if let Some(platform) = platforms.get("windows-x86_64-nsis") {
+            return Some(("windows-x86_64-nsis", platform));
+        }
+
+        if let Some(platform) = platforms.get("windows-x86_64") {
+            return Some(("windows-x86_64", platform));
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Some((key, platform)) = platforms.iter().next() {
+            return Some((key.as_str(), platform));
+        }
+    }
+
+    None
+}
+
+fn fetch_update_manifest() -> Result<RemoteUpdateManifest, String> {
+    let client = update_client()?;
+    let response = client
+        .get(update_manifest_url())
+        .send()
+        .map_err(|err| format!("No se pudo consultar el feed de actualizaciones: {err}"))?
+        .error_for_status()
+        .map_err(|err| format!("El feed de actualizaciones respondió con error: {err}"))?;
+
+    response
+        .json::<RemoteUpdateManifest>()
+        .map_err(|err| format!("No se pudo leer el feed de actualizaciones: {err}"))
+}
+
+#[tauri::command]
+fn check_remote_update() -> Result<RemoteUpdateResult, String> {
+    let manifest = fetch_update_manifest()?;
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+    let current = parse_version(&current_version)?;
+    let latest = parse_version(&manifest.version)?;
+
+    if latest <= current {
+        return Ok(RemoteUpdateResult {
+            status: "current".to_string(),
+            current_version,
+            next_version: Some(manifest.version),
+            notes: "La app está actualizada.".to_string(),
+            download_url: None,
+        });
+    }
+
+    let (_, platform) = choose_platform(&manifest.platforms)
+        .ok_or_else(|| "No hay un paquete compatible para esta plataforma.".to_string())?;
+
+    Ok(RemoteUpdateResult {
+        status: "available".to_string(),
+        current_version,
+        next_version: Some(manifest.version),
+        notes: manifest
+            .notes
+            .unwrap_or_else(|| "Hay una actualización disponible.".to_string()),
+        download_url: Some(platform.url.clone()),
+    })
+}
+
+#[tauri::command]
+fn install_remote_update(app: tauri::AppHandle) -> Result<RemoteUpdateResult, String> {
+    let manifest = fetch_update_manifest()?;
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+    let current = parse_version(&current_version)?;
+    let latest = parse_version(&manifest.version)?;
+
+    if latest <= current {
+        return Ok(RemoteUpdateResult {
+            status: "current".to_string(),
+            current_version,
+            next_version: Some(manifest.version),
+            notes: "La app ya estaba actualizada.".to_string(),
+            download_url: None,
+        });
+    }
+
+    let (_, platform) = choose_platform(&manifest.platforms)
+        .ok_or_else(|| "No hay un paquete compatible para esta plataforma.".to_string())?;
+
+    let client = update_client()?;
+    let mut response = client
+        .get(&platform.url)
+        .send()
+        .map_err(|err| format!("No se pudo descargar la actualización: {err}"))?
+        .error_for_status()
+        .map_err(|err| format!("La descarga de la actualización respondió con error: {err}"))?;
+
+    let mut temp_path = std::env::temp_dir();
+    let file_name = platform
+        .url
+        .rsplit('/')
+        .next()
+        .filter(|value| !value.is_empty())
+        .unwrap_or("underdock-update.exe");
+    temp_path.push(file_name);
+
+    let mut file = fs::File::create(&temp_path)
+        .map_err(|err| format!("No se pudo crear el archivo temporal de actualización: {err}"))?;
+    response
+        .copy_to(&mut file)
+        .map_err(|err| format!("No se pudo guardar la actualización en disco: {err}"))?;
+    file.flush()
+        .map_err(|err| format!("No se pudo finalizar la descarga de la actualización: {err}"))?;
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .arg("/C")
+            .arg("start")
+            .arg("")
+            .arg(temp_path.as_os_str())
+            .spawn()
+            .map_err(|err| format!("No se pudo abrir el instalador: {err}"))?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Command::new(&temp_path)
+            .spawn()
+            .map_err(|err| format!("No se pudo abrir el instalador: {err}"))?;
+    }
+
+    let exit_app = app.clone();
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(1200));
+        exit_app.exit(0);
+    });
+
+    Ok(RemoteUpdateResult {
+        status: "available".to_string(),
+        current_version,
+        next_version: Some(manifest.version),
+        notes: "Actualización descargada. Instalador abierto.".to_string(),
+        download_url: Some(platform.url.clone()),
+    })
 }
 
 #[cfg(target_os = "windows")]
@@ -502,6 +717,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            check_remote_update,
+            install_remote_update,
             run_quick_diagnostic,
             thermal_status,
             create_remote_session,

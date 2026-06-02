@@ -116,6 +116,8 @@ function ClientApp() {
       setUpdateResult(result);
       if (result.status === 'available') {
         notify(`Hay una actualización disponible: ${result.nextVersion ?? 'nueva versión'}`, 'warn');
+      } else if (result.status === 'error') {
+        notify(result.notes, 'danger');
       }
     })();
     return () => {
@@ -216,6 +218,11 @@ function ClientApp() {
       if (result.status === 'available') {
         notify(`Actualización disponible: ${result.nextVersion}. Instalando...`, 'warn');
         await handleNativeUpdateInstall();
+        return;
+      }
+
+      if (result.status === 'error') {
+        notify(result.notes, 'danger');
         return;
       }
 
