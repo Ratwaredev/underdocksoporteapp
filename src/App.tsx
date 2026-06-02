@@ -233,8 +233,11 @@ function ClientApp() {
   }
 
   async function handleRequestRemoteSupport() {
-    if (!session?.deviceToken || !clientDashboard?.device) {
-      notify('No hay un equipo listo para soporte remoto.', 'warn');
+    const deviceId = session?.deviceId ?? clientDashboard?.device?.id;
+    const deviceName = clientDashboard?.device?.displayName ?? session?.displayName ?? 'Equipo activo';
+
+    if (!session?.deviceToken || !deviceId) {
+      notify('Activá el equipo con un código para pedir soporte remoto.', 'warn');
       return;
     }
 
@@ -243,16 +246,16 @@ function ClientApp() {
       const issueSummary = [ticketCategory, ticketIssue, ticketDescription].filter(Boolean).join(' - ');
       const ticket = await appBackend.createTicket(
         {
-          deviceId: clientDashboard.device.id,
+          deviceId,
           issue: issueSummary,
-          clientName: clientDashboard.device.displayName,
+          clientName: deviceName,
           priority: ticketUrgency
         },
         session.deviceToken
       );
 
       const supportSession = await appBackend.createRemoteSession(
-        { deviceId: clientDashboard.device.id, ticketId: ticket.id },
+        { deviceId, ticketId: ticket.id },
         session.deviceToken
       );
 
@@ -273,8 +276,11 @@ function ClientApp() {
   }
 
   async function handleCreateTicket() {
-    if (!session?.deviceToken || !clientDashboard?.device) {
-      notify('No hay un equipo listo para crear tickets.', 'warn');
+    const deviceId = session?.deviceId ?? clientDashboard?.device?.id;
+    const deviceName = clientDashboard?.device?.displayName ?? session?.displayName ?? 'Equipo activo';
+
+    if (!session?.deviceToken || !deviceId) {
+      notify('Activá el equipo con un código para crear tickets.', 'warn');
       return;
     }
 
@@ -283,9 +289,9 @@ function ClientApp() {
       const issueSummary = [ticketCategory, ticketIssue, ticketDescription].filter(Boolean).join(' - ');
       const ticket = await appBackend.createTicket(
         {
-          deviceId: clientDashboard.device.id,
+          deviceId,
           issue: issueSummary,
-          clientName: clientDashboard.device.displayName,
+          clientName: deviceName,
           priority: ticketUrgency
         },
         session.deviceToken
