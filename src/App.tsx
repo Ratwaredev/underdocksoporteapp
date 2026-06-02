@@ -87,7 +87,7 @@ function ClientApp() {
   }>({
     running: false,
     progress: '',
-    summary: 'Listo para generar un informe mÃ¡s completo.',
+    summary: 'Listo para generar un informe más completo.',
     result: null
   });
 
@@ -115,7 +115,7 @@ function ClientApp() {
       if (!alive) return;
       setUpdateResult(result);
       if (result.status === 'available') {
-        notify(`Hay una actualizaciÃ³n disponible: ${result.nextVersion ?? 'nueva versiÃ³n'}`, 'warn');
+        notify(`Hay una actualización disponible: ${result.nextVersion ?? 'nueva versión'}`, 'warn');
       }
     })();
     return () => {
@@ -310,13 +310,13 @@ function ClientApp() {
           session.deviceToken
         );
         await refreshClient(session.deviceToken);
-        notify('DiagnÃ³stico rÃ¡pido guardado.', 'ok');
+        notify('Diagnóstico rápido guardado.', 'ok');
         return;
       }
 
-      notify('DiagnÃ³stico rÃ¡pido completado en esta PC.', 'ok');
+      notify('Diagnóstico rápido completado en esta PC.', 'ok');
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'No se pudo ejecutar el diagnÃ³stico.', 'danger');
+      notify(error instanceof Error ? error.message : 'No se pudo ejecutar el diagnóstico.', 'danger');
     } finally {
       setIsBusy(false);
     }
@@ -326,8 +326,8 @@ function ClientApp() {
     setAdvancedDiagnostic((current) => ({
       ...current,
       running: true,
-      progress: 'Preparando recolecciÃ³n avanzada...',
-      summary: 'Este proceso puede tardar un poco mÃ¡s.',
+      progress: 'Preparando recolección avanzada...',
+      summary: 'Este proceso puede tardar un poco más.',
       result: null
     }));
     setActiveSection('advanced');
@@ -346,7 +346,7 @@ function ClientApp() {
       setAdvancedDiagnostic({
         running: false,
         progress: 'Informe listo.',
-        summary: 'Generado para envÃ­o al tÃ©cnico.',
+        summary: 'Generado para envío al técnico.',
         result: enriched
       });
       setDiagnostic(enriched);
@@ -360,7 +360,7 @@ function ClientApp() {
         );
         await refreshClient(session.deviceToken);
       }
-      notify('DiagnÃ³stico avanzado completado.', 'ok');
+      notify('Diagnóstico avanzado completado.', 'ok');
     } catch (error) {
       setAdvancedDiagnostic((current) => ({
         ...current,
@@ -369,7 +369,7 @@ function ClientApp() {
         summary: 'No se pudo completar el informe.',
         result: null
       }));
-      notify(error instanceof Error ? error.message : 'No se pudo ejecutar el diagnÃ³stico avanzado.', 'danger');
+      notify(error instanceof Error ? error.message : 'No se pudo ejecutar el diagnóstico avanzado.', 'danger');
     }
   }
 
@@ -394,7 +394,7 @@ function ClientApp() {
       setAgentResult(result);
       notify(result.message, result.ok ? 'ok' : 'warn');
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'No se pudo limpiar la selecciÃ³n.', 'danger');
+      notify(error instanceof Error ? error.message : 'No se pudo limpiar la selección.', 'danger');
     } finally {
       setIsBusy(false);
     }
@@ -435,7 +435,7 @@ function ClientApp() {
     const latestDiagnostic = clientDashboard?.diagnostics[0];
     return {
       version: APP_VERSION,
-      lastDiagnostic: latestDiagnostic?.generatedAt ?? 'Sin revisiÃ³n'
+      lastDiagnostic: latestDiagnostic?.generatedAt ?? 'Sin revisión'
     };
   }, [clientDashboard?.diagnostics, clientDashboard?.tickets, remoteSession, session]);
 
@@ -451,25 +451,25 @@ function ClientApp() {
       {
         id: 'cpu',
         label: 'CPU',
-        value: cpuTemp == null ? 'Sin dato' : cpuTemp >= 85 ? 'CrÃ­tico' : cpuTemp >= 70 ? 'AtenciÃ³n' : 'OK',
+        value: cpuTemp == null ? 'Sin dato' : cpuTemp >= 85 ? 'Crítico' : cpuTemp >= 70 ? 'Atención' : 'OK',
         tone: cpuTemp == null ? 'neutral' : cpuTemp >= 85 ? 'danger' : cpuTemp >= 70 ? 'warn' : 'ok'
       },
       {
         id: 'ram',
         label: 'RAM',
-        value: memoryLoad == null ? 'Sin dato' : memoryLoad >= 90 ? 'CrÃ­tico' : memoryLoad >= 75 ? 'AtenciÃ³n' : 'OK',
+        value: memoryLoad == null ? 'Sin dato' : memoryLoad >= 90 ? 'Crítico' : memoryLoad >= 75 ? 'Atención' : 'OK',
         tone: memoryLoad == null ? 'neutral' : memoryLoad >= 90 ? 'danger' : memoryLoad >= 75 ? 'warn' : 'ok'
       },
       {
         id: 'disk',
         label: 'Disco',
-        value: diskFree == null ? 'Sin dato' : diskFree < 50 ? 'AtenciÃ³n' : 'OK',
+        value: diskFree == null ? 'Sin dato' : diskFree < 50 ? 'Atención' : 'OK',
         tone: diskFree == null ? 'neutral' : diskFree < 50 ? 'warn' : 'ok'
       },
       {
         id: 'temp',
         label: 'Temperatura',
-        value: cpuTemp == null ? 'Pendiente' : `${cpuTemp.toFixed(1)} Â°C`,
+        value: cpuTemp == null ? 'Pendiente' : `${cpuTemp.toFixed(1)} °C`,
         tone: cpuTemp == null ? 'neutral' : cpuTemp >= 85 ? 'danger' : cpuTemp >= 70 ? 'warn' : 'ok'
       },
       {
@@ -497,7 +497,7 @@ function ClientApp() {
           <div className="panel">
             <p className="eyebrow">BOOT</p>
             <h1>UnderDock</h1>
-            <p>Preparando soporte remoto, diagnÃ³stico y mantenimiento.</p>
+            <p>Preparando soporte remoto, diagnóstico y mantenimiento.</p>
           </div>
         </section>
         <VersionFooter />
@@ -518,13 +518,13 @@ function ClientApp() {
           </div>
           <div>
             <h1>UnderDock</h1>
-            <p>Soporte tÃ©cnico remoto</p>
+            <p>Soporte técnico remoto</p>
           </div>
         </div>
 
         <div className="status-strip">
-          <StatusItem label="VersiÃ³n" value={`v${status.version}`} tone="neutral" />
-          <StatusItem label="Ãšltima revisiÃ³n" value={status.lastDiagnostic} tone="neutral" />
+          <StatusItem label="Versión" value={`v${status.version}`} tone="neutral" />
+          <StatusItem label="Última revisión" value={status.lastDiagnostic} tone="neutral" />
         </div>
 
         <div className="header-actions">
@@ -550,49 +550,55 @@ function ClientApp() {
           onUpdateInstall={handleNativeUpdateInstall}
         />
 
-        <HomeDashboard
-          activeSection={activeSection}
-          onSelectSection={setActiveSection}
-          onOpenRemote={handleRequestRemoteSupport}
-          onCreateTicket={() => {
-            setShowTicketForm(true);
-            setActiveSection('ticket');
-          }}
-          onQuickDiagnostic={handleRunQuickDiagnostic}
-          onAdvancedDiagnostic={handleRunAdvancedDiagnostic}
-          onOpenCleaner={() => setActiveSection('cleaner')}
-          showTicketForm={showTicketForm}
-        />
+        <section className="workspace-grid">
+          <HomeDashboard
+            activeSection={activeSection}
+            onSelectSection={setActiveSection}
+            onOpenRemote={handleRequestRemoteSupport}
+            onCreateTicket={() => {
+              setShowTicketForm(true);
+              setActiveSection('ticket');
+            }}
+            onQuickDiagnostic={handleRunQuickDiagnostic}
+            onAdvancedDiagnostic={handleRunAdvancedDiagnostic}
+            onOpenCleaner={() => setActiveSection('cleaner')}
+            showTicketForm={showTicketForm}
+          />
 
-        <DetailPanel
-          activeSection={activeSection}
-          session={session}
-          clientDashboard={clientDashboard}
-          remoteSession={remoteSession}
-          ticketIssue={ticketIssue}
-          setTicketIssue={setTicketIssue}
-          ticketCategory={ticketCategory}
-          setTicketCategory={setTicketCategory}
-          ticketUrgency={ticketUrgency}
-          setTicketUrgency={setTicketUrgency}
-          ticketDescription={ticketDescription}
-          setTicketDescription={setTicketDescription}
-          showTicketForm={showTicketForm}
-          setShowTicketForm={setShowTicketForm}
-          quickChecks={quickChecks}
-          quickDiagnostic={quickDiagnostic ?? diagnostic}
-          advancedDiagnostic={advancedDiagnostic}
-          cleanerSelection={cleanerSelection}
-          setCleanerSelection={setCleanerSelection}
-          isBusy={isBusy}
-          onRequestRemoteSupport={handleRequestRemoteSupport}
-          onCreateTicket={handleCreateTicket}
-          onRunQuickDiagnostic={handleRunQuickDiagnostic}
-          onRunAdvancedDiagnostic={handleRunAdvancedDiagnostic}
-          onCleanerAnalyze={handleCleanerAnalyze}
-          onCleanerRun={handleCleanerRun}
-          onOpenRemote={handleOpenRemote}
-        />
+          <DetailPanel
+            activeSection={activeSection}
+            session={session}
+            clientDashboard={clientDashboard}
+            remoteSession={remoteSession}
+            ticketIssue={ticketIssue}
+            setTicketIssue={setTicketIssue}
+            ticketCategory={ticketCategory}
+            setTicketCategory={setTicketCategory}
+            ticketUrgency={ticketUrgency}
+            setTicketUrgency={setTicketUrgency}
+            ticketDescription={ticketDescription}
+            setTicketDescription={setTicketDescription}
+            showTicketForm={showTicketForm}
+            setShowTicketForm={setShowTicketForm}
+            quickChecks={quickChecks}
+            quickDiagnostic={quickDiagnostic ?? diagnostic}
+            advancedDiagnostic={advancedDiagnostic}
+            cleanerSelection={cleanerSelection}
+            setCleanerSelection={setCleanerSelection}
+            isBusy={isBusy}
+            onRequestRemoteSupport={handleRequestRemoteSupport}
+            onCreateTicket={handleCreateTicket}
+            onRunQuickDiagnostic={handleRunQuickDiagnostic}
+            onRunAdvancedDiagnostic={handleRunAdvancedDiagnostic}
+            onCleanerAnalyze={handleCleanerAnalyze}
+            onCleanerRun={handleCleanerRun}
+            onOpenRemote={handleOpenRemote}
+            onGoHome={() => {
+              setShowTicketForm(false);
+              setActiveSection('quick');
+            }}
+          />
+        </section>
       </section>
 
       {toast && <ToastBar toast={toast} />}
@@ -737,7 +743,7 @@ function AdminApp() {
 
           <div className="status-strip">
             <StatusItem label="Acceso" value="Admin" tone="neutral" />
-            <StatusItem label="VersiÃ³n" value={`v${APP_VERSION}`} tone="neutral" />
+            <StatusItem label="Versión" value={`v${APP_VERSION}`} tone="neutral" />
           </div>
         </header>
 
@@ -750,7 +756,7 @@ function AdminApp() {
             <span className="subtle">Separado de la pantalla cliente</span>
           </div>
 
-          <p className="lead">Este panel no comparte sesiÃ³n con el equipo cliente. IniciÃ¡ sesiÃ³n solo si vas a administrar equipos, tickets y activaciÃ³n.</p>
+          <p className="lead">Este panel no comparte sesión con el equipo cliente. Iniciá sesión solo si vas a administrar equipos, tickets y activación.</p>
 
           <form className="admin-login-form" onSubmit={handleSignIn}>
             <label>
@@ -758,7 +764,7 @@ function AdminApp() {
               <input value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" />
             </label>
             <label>
-              <span>ContraseÃ±a</span>
+              <span>Contraseña</span>
               <input
                 type="password"
                 value={password}
@@ -800,13 +806,13 @@ function AdminApp() {
           </div>
           <div>
             <h1>UnderDock Admin</h1>
-            <p>AdministraciÃ³n interna</p>
+            <p>Administración interna</p>
           </div>
         </div>
 
         <div className="status-strip">
-          <StatusItem label="SesiÃ³n" value={session.email ?? 'Admin'} tone="neutral" />
-          <StatusItem label="VersiÃ³n" value={`v${APP_VERSION}`} tone="neutral" />
+          <StatusItem label="Sesión" value={session.email ?? 'Admin'} tone="neutral" />
+          <StatusItem label="Versión" value={`v${APP_VERSION}`} tone="neutral" />
           <StatusItem label="Equipos" value={`${counts.devices}`} tone="neutral" />
         </div>
 
@@ -825,7 +831,7 @@ function AdminApp() {
           <div className="section-head">
             <div>
               <p className="eyebrow">Resumen</p>
-              <h2>Centro de administraciÃ³n</h2>
+              <h2>Centro de administración</h2>
             </div>
             <span className="subtle">{isBusy ? 'Procesando...' : 'Listo'}</span>
           </div>
@@ -833,13 +839,13 @@ function AdminApp() {
           <div className="status-matrix admin-matrix">
             <Metric label="Equipos" value={`${counts.devices}`} />
             <Metric label="Tickets" value={`${counts.tickets}`} />
-            <Metric label="DiagnÃ³sticos" value={`${counts.diagnostics}`} />
-            <Metric label="CÃ³digos" value={`${counts.codes}`} />
+            <Metric label="Diagnósticos" value={`${counts.diagnostics}`} />
+            <Metric label="Códigos" value={`${counts.codes}`} />
           </div>
 
           <div className="button-row">
             <button className="btn btn-primary" onClick={handleGeneratePairingCode} disabled={isBusy}>
-              <Download size={16} /> Generar cÃ³digo
+              <Download size={16} /> Generar código
             </button>
             {updateResult?.status === 'available' && (
               <button className="btn btn-ghost" onClick={handleInstallUpdate} disabled={isUpdating}>
@@ -851,7 +857,7 @@ function AdminApp() {
           {generatedCode && (
             <div className="status-note">
               <ShieldCheck size={16} />
-              <span>CÃ³digo activo: {generatedCode.code} - vence {generatedCode.expiresAt}</span>
+              <span>Código activo: {generatedCode.code} - vence {generatedCode.expiresAt}</span>
             </div>
           )}
         </section>
@@ -868,7 +874,7 @@ function AdminApp() {
               <div className="admin-row" key={device.id}>
                 <div>
                   <strong>{device.displayName}</strong>
-                  <p>{device.computerName} Â· {device.os}</p>
+                  <p>{device.computerName} · {device.os}</p>
                 </div>
                 <span className="pill">{device.status}</span>
               </div>
@@ -914,22 +920,22 @@ function SystemStatusPanel({
           <p className="eyebrow">Estado del equipo</p>
           <h2>PC y salud</h2>
         </div>
-        <span className="pill">{session ? 'Activa' : 'Sin sesiÃ³n'}</span>
+        <span className="pill">{session ? 'Activa' : 'Sin sesión'}</span>
       </div>
       <div className="status-matrix">
-        <Metric label="Equipo" value={session?.displayName ?? 'Sin sesiÃ³n'} />
-        <Metric label="Ãšltima revisiÃ³n" value={status.lastDiagnostic} />
-        <Metric label="VersiÃ³n" value={`v${status.version}`} />
-        <Metric label="SesiÃ³n" value={session ? 'Guardada' : 'No iniciada'} />
+        <Metric label="Equipo" value={session?.displayName ?? 'Sin sesión'} />
+        <Metric label="Última revisión" value={status.lastDiagnostic} />
+        <Metric label="Versión" value={`v${status.version}`} />
+        <Metric label="Sesión" value={session ? 'Guardada' : 'No iniciada'} />
       </div>
       <div className="status-note">
         <ShieldCheck size={16} />
-        <span>{session ? 'Sin problemas crÃ­ticos' : 'Esperando inicio de sesiÃ³n del cliente.'}</span>
+        <span>{session ? 'Sin problemas críticos' : 'Esperando inicio de sesión del cliente.'}</span>
       </div>
       {updateResult?.status === 'available' && (
         <div className="update-banner">
           <div>
-            <strong>ActualizaciÃ³n disponible</strong>
+            <strong>Actualización disponible</strong>
             <p>{isUpdating ? updateProgress || 'Actualizando...' : updateResult.notes}</p>
           </div>
           <button className="btn btn-primary" onClick={onUpdateInstall} disabled={isUpdating}>
@@ -964,19 +970,19 @@ function HomeDashboard({
     <section className="panel dashboard-panel">
       <div className="section-head">
         <div>
-          <p className="eyebrow">Inicio</p>
-          <h2>Todo en un solo panel</h2>
+          <p className="eyebrow">Acciones</p>
+          <h2>Centro de soporte</h2>
         </div>
-        <span className="subtle">{showTicketForm ? 'Formulario abierto' : 'Panel principal'}</span>
+        <span className="subtle">{showTicketForm ? 'Formulario abierto' : 'Vista principal'}</span>
       </div>
       <div className="action-grid">
         <PrimaryActionCard
           active={activeSection === 'remote'}
           icon={<Wifi size={22} />}
           title="Soporte remoto"
-          description="EnviÃ¡ una solicitud para que un tÃ©cnico se conecte y revise tu PC."
+          description="Enviá una solicitud para que un técnico se conecte y revise tu PC."
           buttonLabel="Pedir soporte"
-          stateLabel="Esperando tÃ©cnico / Conectado / Disponible"
+          stateLabel="Esperando técnico · Conectado · Disponible"
           onClick={() => {
             onSelectSection('remote');
             onOpenRemote();
@@ -986,7 +992,7 @@ function HomeDashboard({
           active={activeSection === 'ticket'}
           icon={<TerminalSquare size={22} />}
           title="Crear ticket"
-          description="ContÃ¡ quÃ© problema tenÃ©s y adjuntÃ¡ detalles del equipo."
+          description="Contá qué problema tenés y adjuntá detalles del equipo."
           buttonLabel="Abrir ticket"
           stateLabel="Formulario simple dentro del panel"
           onClick={() => {
@@ -997,9 +1003,9 @@ function HomeDashboard({
         <PrimaryActionCard
           active={activeSection === 'quick'}
           icon={<CheckCircle2 size={22} />}
-          title="DiagnÃ³stico rÃ¡pido"
-          description="Revisa temperatura, memoria, disco, procesos y estado bÃ¡sico."
-          buttonLabel="Ejecutar rÃ¡pido"
+          title="Diagnóstico rápido"
+          description="Revisa temperatura, memoria, disco, procesos y estado básico."
+          buttonLabel="Ejecutar rápido"
           stateLabel="Resultado en chips claros"
           onClick={() => {
             onSelectSection('quick');
@@ -1009,10 +1015,10 @@ function HomeDashboard({
         <PrimaryActionCard
           active={activeSection === 'advanced'}
           icon={<Globe2 size={22} />}
-          title="DiagnÃ³stico avanzado"
-          description="Genera un informe mÃ¡s completo para el tÃ©cnico."
+          title="Diagnóstico avanzado"
+          description="Genera un informe más completo para el técnico."
           buttonLabel="Ejecutar avanzado"
-          stateLabel="Puede tardar mÃ¡s"
+          stateLabel="Puede tardar más"
           onClick={() => {
             onSelectSection('advanced');
             onAdvancedDiagnostic();
@@ -1022,9 +1028,9 @@ function HomeDashboard({
           active={activeSection === 'cleaner'}
           icon={<Trash2 size={22} />}
           title="Cleaner"
-          description="Limpieza segura de temporales, cachÃ© y revisiones bÃ¡sicas."
+          description="Limpieza segura de temporales, caché y revisiones básicas."
           buttonLabel="Abrir cleaner"
-          stateLabel="AnÃ¡lisis antes de limpiar"
+          stateLabel="Análisis antes de limpiar"
           onClick={() => {
             onSelectSection('cleaner');
             onOpenCleaner();
@@ -1062,7 +1068,8 @@ function DetailPanel({
   onRunAdvancedDiagnostic,
   onCleanerAnalyze,
   onCleanerRun,
-  onOpenRemote
+  onOpenRemote,
+  onGoHome
 }: {
   activeSection: SectionId;
   session: AppSession | null;
@@ -1103,6 +1110,7 @@ function DetailPanel({
   onCleanerAnalyze: () => void;
   onCleanerRun: () => void;
   onOpenRemote: () => void;
+  onGoHome: () => void;
 }) {
   return (
     <section className="panel detail-panel">
@@ -1110,23 +1118,57 @@ function DetailPanel({
         <div>
           <p className="eyebrow">Detalle</p>
           <h2>
+            {activeSection === 'remote' && 'Soporte remoto'}
             {activeSection === 'ticket' && 'Crear ticket'}
-            {activeSection === 'quick' && 'DiagnÃ³stico rÃ¡pido'}
-            {activeSection === 'advanced' && 'DiagnÃ³stico avanzado'}
+            {activeSection === 'quick' && 'Diagnóstico rápido'}
+            {activeSection === 'advanced' && 'Diagnóstico avanzado'}
             {activeSection === 'cleaner' && 'Cleaner'}
           </h2>
         </div>
-        <button className="btn btn-ghost btn-mini" onClick={() => setShowTicketForm(false)}>
+        <button
+          className="btn btn-ghost btn-mini"
+          onClick={() => {
+            setShowTicketForm(false);
+            onGoHome();
+          }}
+        >
           Inicio
         </button>
       </div>
 
+      {activeSection === 'remote' && (
+        <div className="detail-block">
+          <p className="lead">Solicitá asistencia remota sin salir de esta pantalla.</p>
+          <div className="detail-meta">
+            <div>
+              <span>Estado</span>
+              <strong>{remoteSession ? 'Conectado' : 'Disponible'}</strong>
+            </div>
+            <div>
+              <span>Código de sesión</span>
+              <strong>{remoteSession?.code ?? 'PENDIENTE'}</strong>
+            </div>
+          </div>
+          <p className="detail-copy">
+            {remoteSession?.instructions ?? 'Integración remota pendiente. Se mostrará el código cuando el técnico esté listo.'}
+          </p>
+          <div className="button-row">
+            <button className="btn btn-primary" onClick={onRequestRemoteSupport} disabled={isBusy}>
+              Pedir soporte
+            </button>
+            <button className="btn btn-ghost" onClick={onOpenRemote} disabled={isBusy}>
+              Abrir herramienta remota
+            </button>
+          </div>
+        </div>
+      )}
+
       {activeSection === 'ticket' && (
         <div className="detail-block">
-          <p className="lead">Formulario simple para que el tÃ©cnico entienda el caso sin pÃ©rdida de tiempo.</p>
+          <p className="lead">Formulario simple para que el técnico entienda el caso sin pérdida de tiempo.</p>
           <div className="field-grid">
             <label>
-              <span>CategorÃ­a</span>
+              <span>Categoría</span>
               <select value={ticketCategory} onChange={(event) => setTicketCategory(event.target.value)}>
                 <option value="Hardware">Hardware</option>
                 <option value="Software">Software</option>
@@ -1147,11 +1189,11 @@ function DetailPanel({
               </select>
             </label>
             <label className="field-wide">
-              <span>DescripciÃ³n</span>
+              <span>Descripción</span>
               <textarea
                 value={ticketDescription}
                 onChange={(event) => setTicketDescription(event.target.value)}
-                placeholder="ContÃ¡ quÃ© pasa, cuÃ¡ndo ocurre y quÃ© ya probaste."
+                placeholder="Contá qué pasa, cuándo ocurre y qué ya probaste."
               />
             </label>
           </div>
@@ -1163,16 +1205,16 @@ function DetailPanel({
               Volver a inicio
             </button>
           </div>
-          <p className="detail-copy">Ãšltimo ticket: {clientDashboard?.tickets[0]?.id ?? 'Sin tickets'}</p>
+          <p className="detail-copy">Último ticket: {clientDashboard?.tickets[0]?.id ?? 'Sin tickets'}</p>
         </div>
       )}
 
       {activeSection === 'quick' && (
         <div className="detail-block">
-          <p className="lead">RevisiÃ³n corta para detectar si hay algo fuera de rango.</p>
+          <p className="lead">Revisión corta para detectar si hay algo fuera de rango.</p>
           <div className="button-row">
             <button className="btn btn-primary" onClick={onRunQuickDiagnostic} disabled={isBusy}>
-              Ejecutar diagnÃ³stico rÃ¡pido
+              Ejecutar diagnóstico rápido
             </button>
           </div>
           <div className="chip-grid">
@@ -1182,7 +1224,7 @@ function DetailPanel({
           </div>
           {quickDiagnostic && (
             <p className="detail-copy">
-              Ãšltima revisiÃ³n: {quickDiagnostic.generatedAt || 'Sin fecha'}.
+              Última revisión: {quickDiagnostic.generatedAt || 'Sin fecha'}.
             </p>
           )}
         </div>
@@ -1190,14 +1232,14 @@ function DetailPanel({
 
       {activeSection === 'advanced' && (
         <div className="detail-block">
-          <p className="lead">Informe mÃ¡s completo para el tÃ©cnico. Puede tardar unos minutos.</p>
+          <p className="lead">Informe más completo para el técnico. Puede tardar unos minutos.</p>
           <div className="progress-box">
             <span>{advancedDiagnostic.running ? advancedDiagnostic.progress || 'Procesando...' : advancedDiagnostic.summary}</span>
             <strong>{advancedDiagnostic.running ? 'En progreso' : 'Listo'}</strong>
           </div>
           <div className="button-row">
             <button className="btn btn-primary" onClick={onRunAdvancedDiagnostic} disabled={isBusy || advancedDiagnostic.running}>
-              Ejecutar diagnÃ³stico avanzado
+              Ejecutar diagnóstico avanzado
             </button>
           </div>
           {advancedDiagnostic.result && (
@@ -1218,7 +1260,7 @@ function DetailPanel({
               onChange={(checked) => setCleanerSelection({ ...cleanerSelection, tempFiles: checked })}
             />
             <CheckOption
-              label="CachÃ© de navegador"
+              label="Caché de navegador"
               checked={cleanerSelection.browserCache}
               onChange={(checked) => setCleanerSelection({ ...cleanerSelection, browserCache: checked })}
             />
@@ -1233,7 +1275,7 @@ function DetailPanel({
               onChange={(checked) => setCleanerSelection({ ...cleanerSelection, oldLogs: checked })}
             />
             <CheckOption
-              label="RevisiÃ³n de inicio de Windows"
+              label="Revisión de inicio de Windows"
               checked={cleanerSelection.startupReview}
               onChange={(checked) => setCleanerSelection({ ...cleanerSelection, startupReview: checked })}
             />
@@ -1243,7 +1285,7 @@ function DetailPanel({
               Analizar primero
             </button>
             <button className="btn btn-primary" onClick={onCleanerRun} disabled={isBusy}>
-              Limpiar selecciÃ³n
+              Limpiar selección
             </button>
           </div>
         </div>

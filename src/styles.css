@@ -219,9 +219,14 @@ button { color: inherit; }
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1.32fr);
   gap: 16px;
   margin-top: 16px;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.92fr);
+  gap: 16px;
   align-items: start;
 }
 
@@ -335,7 +340,7 @@ button { color: inherit; }
   border: 1px solid rgba(241,240,232,.1);
   background: linear-gradient(180deg, rgba(6,7,7,.82), rgba(3,4,4,.76));
   padding: 16px;
-  min-height: 186px;
+  min-height: 176px;
   display: grid;
   gap: 12px;
   cursor: pointer;
@@ -385,6 +390,10 @@ button { color: inherit; }
 .detail-block {
   display: grid;
   gap: 14px;
+}
+
+.detail-panel {
+  min-width: 0;
 }
 
 .field-grid {
@@ -612,6 +621,7 @@ button { color: inherit; }
 @media (max-width: 1200px) {
   .shell-header,
   .dashboard-grid,
+  .workspace-grid,
   .admin-grid {
     grid-template-columns: 1fr;
   }
