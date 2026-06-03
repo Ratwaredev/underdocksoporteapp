@@ -267,6 +267,9 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
     configured: true,
     description: 'Modo local demo. Los datos quedan en el navegador de esta maquina.',
     async bootstrap() {
+      const adminSession = readAdminSession();
+      if (adminSession?.email) return adminSession;
+
       const session = readSession();
       if (session?.role === 'client' && session.deviceToken) return session;
 
@@ -361,6 +364,7 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
         devices: state.devices,
         tickets: state.tickets,
         diagnostics: state.diagnostics,
+        sessions: state.sessions,
         releases: state.releases,
         pairingCodes: state.pairingCodes
       });
@@ -717,11 +721,12 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
       const session = readAdminSession();
       if (!session?.accessToken) throw new Error('No hay sesion admin activa.');
 
-      const [profile, devices, tickets, diagnostics, releases, pairingCodes] = await Promise.all([
+      const [profile, devices, tickets, diagnostics, sessions, releases, pairingCodes] = await Promise.all([
         single<AdminProfile>('admin_users', { user_id: `eq.${session.userId ?? ''}` }, session.accessToken),
         select<DeviceRecord>('devices', { order: 'updated_at.desc' }, session.accessToken),
         select<TicketRecord>('tickets', { order: 'updated_at.desc' }, session.accessToken),
         select<DiagnosticRecord>('diagnostics', { order: 'generated_at.desc' }, session.accessToken),
+        select<SessionRecord>('sessions', { order: 'created_at.desc' }, session.accessToken),
         select<ReleaseRecord>('releases', { order: 'published_at.desc' }, session.accessToken),
         select<PairingCodeRecord>('pairing_codes', { order: 'created_at.desc' }, session.accessToken)
       ]);
@@ -730,7 +735,7 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
         throw new Error('No se pudo leer el perfil admin.');
       }
 
-      return { profile, devices, tickets, diagnostics, releases, pairingCodes };
+      return { profile, devices, tickets, diagnostics, sessions, releases, pairingCodes };
     },
     async getClientDashboard(deviceToken) {
       const result = await rpc<ClientDashboard>('get_client_dashboard', { p_device_token: deviceToken });

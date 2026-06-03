@@ -13,7 +13,7 @@ import type {
   TicketRecord,
   UpdateResult
 } from './lib/domain';
-import { APP_VERSION } from './lib/domain';
+import { APP_VERSION, STORAGE_KEYS } from './lib/domain';
 import { backendConfig } from './lib/backend';
 import { DiagnosticReport, runQuickDiagnostic } from './lib/diagnostics';
 import { openRemoteTool, RemoteSession } from './lib/support';
@@ -130,6 +130,21 @@ function getAppRoute(): AppRoute {
 
   const recovery = readRecoverySession();
   if (recovery) return { kind: 'recovery', recovery };
+
+  const hasStoredSession = (key: string, role: 'admin' | 'client') => {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return false;
+
+    try {
+      const parsed = JSON.parse(raw) as { role?: unknown };
+      return parsed.role === role;
+    } catch {
+      return false;
+    }
+  };
+
+  if (hasStoredSession(STORAGE_KEYS.adminSession, 'admin')) return { kind: 'admin' };
+  if (hasStoredSession(STORAGE_KEYS.clientSession, 'client')) return { kind: 'client' };
 
   const savedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
   if (savedView === 'admin') return { kind: 'admin' };
@@ -748,7 +763,6 @@ function ClientApp({ onGoAdmin }: { onGoAdmin: () => void }) {
 
 function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmin: () => void }) {
   const [session, setSession] = useState<AppSession | null>(null);
-  const [clientSessionActive, setClientSessionActive] = useState(false);
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -779,9 +793,9 @@ function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmi
     (async () => {
       try {
         const restored = await appBackend.bootstrap();
-        if (alive) setClientSessionActive(Boolean(restored?.deviceToken));
+        if (alive) setSession(restored?.role === 'admin' ? restored : null);
       } catch {
-        if (alive) setClientSessionActive(false);
+        if (alive) setSession(null);
       }
     })();
     return () => {
@@ -890,6 +904,7 @@ function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmi
     devices: dashboard?.devices.length ?? 0,
     tickets: dashboard?.tickets.length ?? 0,
     diagnostics: dashboard?.diagnostics.length ?? 0,
+    sessions: dashboard?.sessions.length ?? 0,
     codes: dashboard?.pairingCodes.length ?? 0
   };
 
@@ -980,13 +995,11 @@ function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmi
           title="Sesiones remotas"
           eyebrow="Soporte remoto"
           description="Sesiones activas y referencias del ticket asociado."
-          rows={(dashboard?.tickets ?? [])
-            .filter((ticket) => Boolean(ticket.remoteCode))
-            .map((ticket) => ({
-              primary: ticket.remoteCode ?? ticket.id,
-              secondary: ticket.issue,
-              meta: ticket.status
-            }))}
+          rows={(dashboard?.sessions ?? []).map((sessionRow) => ({
+            primary: sessionRow.code,
+            secondary: `${sessionRow.ticketId} · ${sessionRow.createdAt}`,
+            meta: `${sessionRow.expiresInMinutes} min`
+          }))}
         />
       )}
 

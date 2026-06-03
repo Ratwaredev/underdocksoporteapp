@@ -31,7 +31,7 @@ export function AdminLayout({
   updateResult: UpdateResult | null;
   isUpdating: boolean;
   updateProgress: string;
-  counts: { devices: number; tickets: number; diagnostics: number; codes: number };
+  counts: { devices: number; tickets: number; diagnostics: number; sessions: number; codes: number };
   onRefresh: () => void;
   onSignOut: () => void;
   onInstallUpdate: () => void;
@@ -92,6 +92,7 @@ export function AdminLayout({
                 {isBusy ? 'Procesando' : 'Listo'}
               </span>
               <span className="header-chip">Equipos {counts.devices}</span>
+              <span className="header-chip">Sesiones {counts.sessions}</span>
             </div>
             <div className="header-actions">
               <button className="btn btn-ghost" onClick={onRefresh} disabled={isBusy || isUpdating}>
