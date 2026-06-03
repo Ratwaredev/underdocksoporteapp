@@ -19,7 +19,7 @@ export function AdminDevicesPage({
   onGeneratePairingCode: () => void;
   onCopyCode: () => void;
   onOpenRemoteTool: () => void;
-  onShowDiagnostics: () => void;
+  onShowDiagnostics: (deviceId?: string) => void;
 }) {
   return (
     <div className="admin-workspace">
@@ -55,7 +55,7 @@ export function AdminDevicesPage({
                   <button className="btn btn-ghost btn-mini" onClick={onOpenRemoteTool} disabled={isBusy}>
                     <SquareTerminal size={14} /> Abrir sesion remota
                   </button>
-                  <button className="btn btn-ghost btn-mini" onClick={onShowDiagnostics}>
+                  <button className="btn btn-ghost btn-mini" onClick={() => onShowDiagnostics(device.id)}>
                     Ver diagnostico
                   </button>
                 </div>

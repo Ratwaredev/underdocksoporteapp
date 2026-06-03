@@ -419,7 +419,20 @@ button {
 .client-detail,
 .stack-panel,
 .pair-panel {
-  padding: 20px;
+  padding: 18px;
+}
+
+.client-detail {
+  scroll-margin-top: 18px;
+}
+
+.client-summary__top,
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .stack-panel__head,
@@ -469,13 +482,23 @@ button {
   gap: 10px;
 }
 
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .info-metric,
 .status-chip,
 .info-card {
-  padding: 12px 14px;
+  padding: 11px 12px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.02);
+}
+
+.info-metric--compact {
+  padding: 10px 11px;
 }
 
 .info-metric span,
@@ -530,6 +553,11 @@ button {
   background: rgba(255, 255, 255, 0.02);
 }
 
+.status-band--compact {
+  margin-top: 10px;
+  padding: 10px 12px;
+}
+
 .status-band span {
   display: inline-flex;
   align-items: center;
@@ -540,7 +568,7 @@ button {
 
 .action-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 10px;
 }
 
@@ -549,10 +577,13 @@ button {
   border: 1px solid var(--line);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.02);
-  padding: 16px;
+  padding: 12px;
   display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
   gap: 10px;
+  align-items: center;
   cursor: pointer;
+  min-height: 88px;
 }
 
 .action-card.is-active {
@@ -582,10 +613,27 @@ button {
   font-size: 13px;
 }
 
+.action-card > p {
+  grid-column: 2 / 3;
+}
+
+.action-card > strong {
+  grid-column: 2 / 3;
+}
+
+.action-card:focus-visible {
+  outline: 2px solid rgba(216, 178, 76, 0.45);
+  outline-offset: 2px;
+}
+
 .detail-stack,
 .detail-form {
   display: grid;
   gap: 14px;
+}
+
+.detail-stack {
+  padding-top: 2px;
 }
 
 .detail-lead {
@@ -773,6 +821,10 @@ button {
   padding: 12px 14px;
 }
 
+.row-list--diagnostics {
+  gap: 12px;
+}
+
 .row-item,
 .device-row {
   display: grid;
@@ -793,6 +845,15 @@ button {
 .device-row p {
   margin: 4px 0 0;
   line-height: 1.45;
+}
+
+.row-item--stacked {
+  gap: 10px;
+}
+
+.row-item__detail {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .empty-state {

@@ -16,7 +16,7 @@ import type {
 } from '../lib/domain';
 import { CustomTitlebar } from './CustomTitlebar';
 import { UpdateNotice } from './UpdateNotice';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 
 type SectionId = 'remote' | 'ticket' | 'quick' | 'advanced' | 'cleaner';
 
@@ -62,7 +62,8 @@ export function ClientHome({
   onRefresh,
   onSignOut,
   onInstallUpdate,
-  agentResult
+  agentResult,
+  detailRef
 }: {
   session: AppSession;
   clientDashboard: ClientDashboard | null;
@@ -111,6 +112,7 @@ export function ClientHome({
   onSignOut: () => void;
   onInstallUpdate: () => void;
   agentResult: unknown;
+  detailRef: RefObject<HTMLElement | null>;
 }) {
   return (
     <main className="page-shell">
@@ -133,7 +135,7 @@ export function ClientHome({
 
       <section className="client-workspace">
         <section className="panel client-summary">
-          <div className="stack-panel__head">
+          <div className="client-summary__top">
             <div>
               <p className="eyebrow">Salud de la PC</p>
               <h2>{clientDashboard?.device.displayName ?? session.displayName ?? 'Equipo activo'}</h2>
@@ -141,13 +143,13 @@ export function ClientHome({
             <span className="pill">{session.orgName ?? 'Cliente'}</span>
           </div>
 
-          <div className="health-grid">
+          <div className="summary-strip">
             {quickChecks.map((item) => (
-              <InfoMetric key={item.id} label={item.label} value={item.value} tone={item.tone} />
+              <InfoMetric key={item.id} label={item.label} value={item.value} tone={item.tone} compact />
             ))}
           </div>
 
-          <div className="status-band">
+          <div className="status-band status-band--compact">
             <span>
               <ShieldCheck size={14} /> Ultima revision: {clientDashboard?.diagnostics[0]?.generatedAt ?? 'Sin revision'}
             </span>
@@ -224,15 +226,13 @@ export function ClientHome({
           </div>
         </section>
 
-        <section className="panel client-detail">
-          <div className="stack-panel__head">
+        <section className="panel client-detail" ref={detailRef}>
+          <div className="detail-head">
             <div>
-              <p className="eyebrow">Detalle</p>
+              <p className="eyebrow">Seccion activa</p>
               <h2>{detailTitle(activeSection)}</h2>
             </div>
-            <button className="btn btn-ghost btn-mini" onClick={() => setShowTicketForm(false)}>
-              Inicio
-            </button>
+            <span className="subtle">Click en una tarjeta para saltar aqui</span>
           </div>
 
           {activeSection === 'remote' && (
@@ -385,7 +385,7 @@ function ActionCard({
   onClick: () => void;
 }) {
   return (
-    <button className={`action-card ${active ? 'is-active' : ''}`} onClick={onClick}>
+    <button className={`action-card ${active ? 'is-active' : ''}`} onClick={onClick} aria-pressed={active}>
       <span className="action-card__icon">{icon}</span>
       <strong>{title}</strong>
       <p>{description}</p>
@@ -396,14 +396,16 @@ function ActionCard({
 function InfoMetric({
   label,
   value,
-  tone
+  tone,
+  compact = false
 }: {
   label: string;
   value: string;
   tone: 'ok' | 'warn' | 'danger' | 'neutral';
+  compact?: boolean;
 }) {
   return (
-    <div className={`info-metric info-metric--${tone}`}>
+    <div className={`info-metric info-metric--${tone} ${compact ? 'info-metric--compact' : ''}`}>
       <span>{label}</span>
       <strong>{value}</strong>
     </div>

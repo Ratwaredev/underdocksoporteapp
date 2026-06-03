@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Bell, Download, RefreshCw, ShieldCheck } from 'lucide-react';
 import { appBackend } from './lib/backend';
@@ -275,6 +275,8 @@ function ClientApp({ onGoAdmin }: { onGoAdmin: () => void }) {
     summary: 'Listo para generar un informe más completo.',
     result: null
   });
+  const activeSectionRef = useRef<HTMLElement | null>(null);
+  const lastSectionRef = useRef<SectionId>(activeSection);
 
   useEffect(() => {
     let alive = true;
@@ -348,6 +350,12 @@ function ClientApp({ onGoAdmin }: { onGoAdmin: () => void }) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (lastSectionRef.current === activeSection) return;
+    lastSectionRef.current = activeSection;
+    activeSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [activeSection]);
 
   async function refreshClient(deviceToken: string) {
     setIsBusy(true);
@@ -733,6 +741,7 @@ function ClientApp({ onGoAdmin }: { onGoAdmin: () => void }) {
       onSignOut={handleSignOut}
       onInstallUpdate={handleNativeUpdateInstall}
       agentResult={agentResult}
+      detailRef={activeSectionRef}
     />
   );
 }
@@ -898,12 +907,6 @@ function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmi
     return [ticket.id, ticket.issue, ticket.status, ticket.clientName].some((value) => value.toLowerCase().includes(q));
   });
 
-  const filteredDiagnostics = (dashboard?.diagnostics ?? []).filter((diagnostic) => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return true;
-    return [diagnostic.id, diagnostic.deviceId].some((value) => value.toLowerCase().includes(q));
-  });
-
   if (!session) {
     return (
       <AdminLogin
@@ -952,7 +955,10 @@ function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmi
             const message = await openRemoteTool();
             notify(message, 'neutral');
           }}
-          onShowDiagnostics={() => setSelectedPage('diagnostics')}
+          onShowDiagnostics={(deviceId) => {
+            setSelectedPage('diagnostics');
+            if (deviceId) setSearchQuery(deviceId);
+          }}
         />
       )}
 
@@ -985,16 +991,7 @@ function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmi
       )}
 
       {selectedPage === 'diagnostics' && (
-        <SimpleAdminPage
-          title="Diagnosticos"
-          eyebrow="Salud"
-          description="Informe compacto de los equipos con actividad reciente."
-          rows={filteredDiagnostics.map((diagnostic) => ({
-            primary: diagnostic.deviceId,
-            secondary: diagnostic.generatedAt,
-            meta: diagnostic.id
-          }))}
-        />
+        <DiagnosticsAdminPage dashboard={dashboard} searchQuery={searchQuery} />
       )}
 
       {selectedPage === 'settings' && (
@@ -1103,6 +1100,96 @@ function SimpleAdminPage({
       </div>
     </section>
   );
+}
+
+function DiagnosticsAdminPage({
+  dashboard,
+  searchQuery
+}: {
+  dashboard: AdminDashboard | null;
+  searchQuery: string;
+}) {
+  const query = searchQuery.trim().toLowerCase();
+  const devices = [...(dashboard?.devices ?? [])].sort((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt));
+  const diagnosticsByDevice = new Map<string, DiagnosticRecord>();
+
+  for (const diagnostic of dashboard?.diagnostics ?? []) {
+    if (!diagnosticsByDevice.has(diagnostic.deviceId)) {
+      diagnosticsByDevice.set(diagnostic.deviceId, diagnostic);
+    }
+  }
+
+  const rows = devices
+    .filter((device) => {
+      if (!query) return true;
+      const diagnostic = diagnosticsByDevice.get(device.id);
+      return [
+        device.id,
+        device.displayName,
+        device.computerName,
+        device.userName,
+        device.os,
+        diagnostic?.id ?? '',
+        formatDiagnosticSummary(diagnostic?.payload ?? null)
+      ].some((value) => value.toLowerCase().includes(query));
+    })
+    .map((device) => {
+      const diagnostic = diagnosticsByDevice.get(device.id);
+
+      return {
+        primary: device.displayName,
+        secondary: [device.id, device.computerName, device.lastSeenAt].join(' · '),
+        meta: diagnostic ? diagnostic.id : 'Sin diagnostico',
+        detail: diagnostic ? formatDiagnosticSummary(diagnostic.payload) : 'Sin diagnostico guardado todavia.'
+      };
+    });
+
+  return (
+    <section className="panel stack-panel">
+      <div className="stack-panel__head">
+        <div>
+          <p className="eyebrow">Salud</p>
+          <h2>Diagnosticos</h2>
+        </div>
+        <span className="subtle">Informe compacto de los equipos con actividad reciente.</span>
+      </div>
+      <div className="row-list row-list--diagnostics">
+        {rows.length === 0 ? (
+          <div className="empty-state">Sin equipos que coincidan con la busqueda.</div>
+        ) : (
+          rows.map((row) => (
+            <article className="row-item row-item--stacked" key={`${row.primary}-${row.meta}`}>
+              <div>
+                <strong>{row.primary}</strong>
+                <p>{row.secondary}</p>
+                <p className="row-item__detail">{row.detail}</p>
+              </div>
+              <span className="pill">{row.meta}</span>
+            </article>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function formatDiagnosticSummary(payload: Record<string, unknown> | null) {
+  if (!payload) return 'Sin diagnostico guardado todavia.';
+
+  const parts: string[] = [];
+  const cpu = typeof payload.cpu === 'string' ? payload.cpu : '';
+  const temperature = typeof payload.maxTemperatureC === 'number' ? `${payload.maxTemperatureC.toFixed(1)} °C` : '';
+  const ramTotal = typeof payload.ramTotalGb === 'number' ? `${payload.ramTotalGb.toFixed(0)} GB RAM` : '';
+  const ramFree = typeof payload.ramFreeGb === 'number' ? `${payload.ramFreeGb.toFixed(1)} GB libres` : '';
+  const diskFree = typeof payload.systemDriveFreeGb === 'number' ? `${payload.systemDriveFreeGb.toFixed(0)} GB libres` : '';
+  const defender = typeof payload.defenderStatus === 'string' ? payload.defenderStatus : '';
+  const reboot = payload.pendingReboot === true ? 'Reinicio pendiente' : '';
+
+  for (const value of [cpu, temperature, ramTotal && ramFree ? `${ramFree} / ${ramTotal}` : ramTotal, diskFree, defender, reboot]) {
+    if (value) parts.push(value);
+  }
+
+  return parts.length > 0 ? parts.join(' · ') : 'Diagnostico disponible sin resumen legible.';
 }
 
 function InfoCard({ label, value }: { label: string; value: string }) {
