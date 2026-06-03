@@ -657,7 +657,9 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
       if (!profile) {
         throw new Error('El usuario autenticado no figura como admin en la base.');
       }
-      if (orgName && profile.orgName && orgName.trim() !== profile.orgName.trim()) {
+      const submittedOrg = orgName.trim().toLowerCase();
+      const profileOrg = profile.orgName.trim().toLowerCase();
+      if (submittedOrg && profileOrg && submittedOrg !== profileOrg) {
         throw new Error('El equipo indicado no coincide con tu perfil admin.');
       }
 

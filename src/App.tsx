@@ -211,7 +211,7 @@ function App() {
 
   return (
     <ShellFrame updateResult={updateResult} isUpdating={isUpdating} updateProgress={updateProgress} onInstallUpdate={handleInstallUpdate}>
-      {route.kind === 'admin' ? <AdminApp initialEmail={route.email} onGoClient={openClient} onGoAdmin={openAdmin} /> : <ClientApp onGoAdmin={openAdmin} />}
+      {route.kind === 'admin' ? <AdminApp initialEmail={route.email} onGoAdmin={openAdmin} /> : <ClientApp onGoAdmin={openAdmin} />}
     </ShellFrame>
   );
 }
@@ -737,7 +737,7 @@ function ClientApp({ onGoAdmin }: { onGoAdmin: () => void }) {
   );
 }
 
-function AdminApp({ initialEmail, onGoClient, onGoAdmin }: { initialEmail?: string; onGoClient: () => void; onGoAdmin: () => void }) {
+function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmin: () => void }) {
   const [session, setSession] = useState<AppSession | null>(null);
   const [clientSessionActive, setClientSessionActive] = useState(false);
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
@@ -747,11 +747,11 @@ function AdminApp({ initialEmail, onGoClient, onGoAdmin }: { initialEmail?: stri
   const [updateProgress, setUpdateProgress] = useState('');
   const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
   const [email, setEmail] = useState(initialEmail ?? (backendConfig.backendKind === 'local' ? 'admin@underdock.local' : ''));
-  const [orgName, setOrgName] = useState(backendConfig.backendKind === 'local' ? 'UnderDock Demo' : '');
   const [password, setPassword] = useState('');
   const [generatedCode, setGeneratedCode] = useState<PairingCodeRecord | null>(null);
   const [selectedPage, setSelectedPage] = useState<AdminPage>('devices');
   const [searchQuery, setSearchQuery] = useState('');
+  const [authError, setAuthError] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -805,14 +805,17 @@ function AdminApp({ initialEmail, onGoClient, onGoAdmin }: { initialEmail?: stri
   async function handleSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsBusy(true);
+    setAuthError('');
     try {
-      const result = await appBackend.signInAdmin(email.trim(), password, orgName.trim());
+      const result = await appBackend.signInAdmin(email.trim(), password, '');
       setSession(result.session);
       setPassword('');
       notify('Acceso admin concedido.', 'ok');
       await loadDashboard();
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'No se pudo iniciar sesion admin.', 'danger');
+      const message = error instanceof Error ? error.message : 'No se pudo iniciar sesion admin.';
+      setAuthError(message);
+      notify(message, 'danger');
     } finally {
       setIsBusy(false);
     }
@@ -904,16 +907,11 @@ function AdminApp({ initialEmail, onGoClient, onGoAdmin }: { initialEmail?: stri
       <AdminLogin
         email={email}
         setEmail={setEmail}
-        orgName={orgName}
-        setOrgName={setOrgName}
         password={password}
         setPassword={setPassword}
         onSubmit={handleSignIn}
         isBusy={isBusy}
-        clientStatusLabel={clientSessionActive ? 'Sesion cliente activa' : 'Sesion cliente inactiva'}
-        adminStatusLabel="Admin no iniciado"
-        onGoClient={onGoClient}
-        onBrandDoubleClick={onGoAdmin}
+        authError={authError}
       />
     );
   }
