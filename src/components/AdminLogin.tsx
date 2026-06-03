@@ -12,7 +12,9 @@ export function AdminLogin({
   onSubmit,
   isBusy,
   clientStatusLabel,
-  adminStatusLabel
+  adminStatusLabel,
+  onGoClient,
+  onBrandDoubleClick
 }: {
   email: string;
   setEmail: (value: string) => void;
@@ -24,11 +26,13 @@ export function AdminLogin({
   isBusy: boolean;
   clientStatusLabel: string;
   adminStatusLabel: string;
+  onGoClient: () => void;
+  onBrandDoubleClick?: () => void;
 }) {
   return (
     <main className="page-shell">
       <div className="shell-backdrop" />
-      <CustomTitlebar title="UnderDock" subtitle="Acceso admin" status={adminStatusLabel} />
+      <CustomTitlebar title="UnderDock" subtitle="Acceso admin" status={adminStatusLabel} onBrandDoubleClick={onBrandDoubleClick} />
 
       <section className="auth-shell">
         <form className="auth-card panel" onSubmit={onSubmit}>
@@ -74,6 +78,9 @@ export function AdminLogin({
           </div>
 
           <p className="tiny-copy">Google es opcional y solo para administradores.</p>
+          <button className="btn btn-quiet btn-mini" type="button" onClick={onGoClient}>
+            Volver a cliente
+          </button>
           <div className="status-foot">
             <span className="status-foot__item">
               <ShieldCheck size={14} />

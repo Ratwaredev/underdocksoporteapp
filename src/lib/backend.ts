@@ -49,6 +49,7 @@ type BackendBase = {
   description: string;
   bootstrap(): Promise<StoredSession>;
   signInAdmin(email: string, password: string, orgName: string): Promise<SignInResult>;
+  completePasswordRecovery(accessToken: string, newPassword: string): Promise<void>;
   signOut(): Promise<void>;
   signOutAdmin(): Promise<void>;
   generatePairingCode(): Promise<PairingCodeRecord>;
@@ -288,6 +289,9 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
       writeAdminSession(session);
       return { session, profile: state.profile };
     },
+    async completePasswordRecovery() {
+      throw new Error('Recuperacion de contraseña no disponible en modo local.');
+    },
     async signOut() {
       writeSession(null);
     },
@@ -507,6 +511,9 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
         async signInAdmin(_email, _password, _orgName) {
           throw new Error('Supabase no esta configurado.');
         },
+        async completePasswordRecovery() {
+          throw new Error('Supabase no esta configurado.');
+        },
         async signOut() {
           return;
         },
@@ -667,6 +674,12 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
 
       writeAdminSession(session);
       return { session, profile };
+    },
+    async completePasswordRecovery(accessToken, newPassword) {
+      await request('/auth/v1/user', {
+        method: 'PUT',
+        body: JSON.stringify({ password: newPassword })
+      }, accessToken);
     },
     async signOut() {
       writeSession(null);

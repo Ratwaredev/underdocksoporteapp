@@ -4,16 +4,18 @@ export function CustomTitlebar({
   title = 'UnderDock',
   subtitle,
   status,
-  rightSlot
+  rightSlot,
+  onBrandDoubleClick
 }: {
   title?: string;
   subtitle?: string;
   status?: string;
   rightSlot?: ReactNode;
+  onBrandDoubleClick?: () => void;
 }) {
   return (
     <header className="titlebar panel" data-tauri-drag-region>
-      <div className="titlebar__brand" data-tauri-drag-region>
+      <div className="titlebar__brand" data-tauri-drag-region onDoubleClick={onBrandDoubleClick}>
         <div className="brand-mark brand-mark--small" aria-hidden="true">
           <span />
         </div>

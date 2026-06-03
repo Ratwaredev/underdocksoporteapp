@@ -14,6 +14,7 @@ import type {
   UpdateResult
 } from './lib/domain';
 import { APP_VERSION } from './lib/domain';
+import { backendConfig } from './lib/backend';
 import { DiagnosticReport, runQuickDiagnostic } from './lib/diagnostics';
 import { openRemoteTool, RemoteSession } from './lib/support';
 import { checkForUpdates as checkNativeUpdates, installLatestUpdate as installNativeUpdate } from './lib/updates';
@@ -23,11 +24,24 @@ import { AdminLayout } from './components/AdminLayout';
 import { AdminLogin } from './components/AdminLogin';
 import { ClientActivation } from './components/ClientActivation';
 import { ClientHome } from './components/ClientHome';
+import { PasswordRecovery } from './components/PasswordRecovery';
+import { UpdateNotice } from './components/UpdateNotice';
 
 type Toast = { message: string; tone?: 'neutral' | 'ok' | 'warn' | 'danger' } | null;
-type AppView = 'client' | 'admin';
 type SectionId = 'remote' | 'ticket' | 'quick' | 'advanced' | 'cleaner';
 type AdminPage = 'devices' | 'tickets' | 'sessions' | 'diagnostics' | 'settings';
+type RecoverySession = {
+  accessToken: string;
+  refreshToken: string | null;
+  emailHint: string | null;
+};
+
+type AppRoute =
+  | { kind: 'client' }
+  | { kind: 'admin'; email?: string }
+  | { kind: 'recovery'; recovery: RecoverySession };
+
+const VIEW_STORAGE_KEY = 'underdock.view.v1';
 
 type QuickCheckItem = {
   id: string;
@@ -53,18 +67,177 @@ type HealthSummary = {
   stability: string;
 };
 
-function getAppView(): AppView {
-  if (typeof window === 'undefined') return 'client';
+function decodeBase64Url(value: string) {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4 || 4)) % 4);
+  return window.atob(padded);
+}
+
+function decodeJwtEmail(accessToken: string): string | null {
+  try {
+    const payload = accessToken.split('.')[1];
+    if (!payload) return null;
+    const parsed = JSON.parse(decodeBase64Url(payload)) as { email?: unknown };
+    return typeof parsed.email === 'string' && parsed.email.trim() ? parsed.email.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function readRecoverySession(): RecoverySession | null {
+  if (typeof window === 'undefined') return null;
+
+  const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
+  const storageKey = 'underdock.recovery.v1';
+
+  if (hash) {
+    const params = new URLSearchParams(hash);
+    if (params.get('type') === 'recovery') {
+      const accessToken = params.get('access_token')?.trim() || '';
+      if (accessToken) {
+        const recovery: RecoverySession = {
+          accessToken,
+          refreshToken: params.get('refresh_token'),
+          emailHint: decodeJwtEmail(accessToken)
+        };
+
+        window.sessionStorage.setItem(storageKey, JSON.stringify(recovery));
+        window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
+        return recovery;
+      }
+    }
+  }
+
+  const fromStorage = window.sessionStorage.getItem(storageKey);
+  if (!fromStorage) return null;
+
+  try {
+    const parsed = JSON.parse(fromStorage) as RecoverySession;
+    return parsed.accessToken ? parsed : null;
+  } catch {
+    window.sessionStorage.removeItem(storageKey);
+    return null;
+  }
+}
+
+function clearRecoverySession() {
+  if (typeof window === 'undefined') return;
+  window.sessionStorage.removeItem('underdock.recovery.v1');
+}
+
+function getAppRoute(): AppRoute {
+  if (typeof window === 'undefined') return { kind: 'client' };
+
+  const recovery = readRecoverySession();
+  if (recovery) return { kind: 'recovery', recovery };
+
+  const savedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
+  if (savedView === 'admin') return { kind: 'admin' };
 
   const view = new URLSearchParams(window.location.search).get('view');
-  return view === 'admin' ? 'admin' : 'client';
+  return view === 'admin' ? { kind: 'admin' } : { kind: 'client' };
 }
 
 function App() {
-  return getAppView() === 'admin' ? <AdminApp /> : <ClientApp />;
+  const [route, setRoute] = useState<AppRoute>(() => getAppRoute());
+  const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState('');
+  const openAdmin = () => {
+    if (typeof window !== 'undefined') window.localStorage.setItem(VIEW_STORAGE_KEY, 'admin');
+    setRoute((current) => (current.kind === 'recovery' ? current : { kind: 'admin' }));
+  };
+  const openClient = () => {
+    if (typeof window !== 'undefined') window.localStorage.setItem(VIEW_STORAGE_KEY, 'client');
+    setRoute((current) => (current.kind === 'recovery' ? current : { kind: 'client' }));
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || !event.altKey) return;
+      if (event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        openAdmin();
+      }
+      if (event.key.toLowerCase() === 'c') {
+        event.preventDefault();
+        openClient();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const result = await checkNativeUpdates();
+      if (!alive) return;
+      setUpdateResult(result);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function handleInstallUpdate() {
+    setIsUpdating(true);
+    try {
+      const result = await installNativeUpdate((progress) => setUpdateProgress(progress));
+      setUpdateResult(result);
+    } finally {
+      setIsUpdating(false);
+      setUpdateProgress('');
+    }
+  }
+
+  if (route.kind === 'recovery') {
+    return (
+      <ShellFrame updateResult={updateResult} isUpdating={isUpdating} updateProgress={updateProgress} onInstallUpdate={handleInstallUpdate}>
+        <PasswordRecovery
+          recovery={route.recovery}
+          onCancel={() => {
+            clearRecoverySession();
+            openClient();
+          }}
+          onCompleted={() => {
+            clearRecoverySession();
+          }}
+        />
+      </ShellFrame>
+    );
+  }
+
+  return (
+    <ShellFrame updateResult={updateResult} isUpdating={isUpdating} updateProgress={updateProgress} onInstallUpdate={handleInstallUpdate}>
+      {route.kind === 'admin' ? <AdminApp initialEmail={route.email} onGoClient={openClient} onGoAdmin={openAdmin} /> : <ClientApp onGoAdmin={openAdmin} />}
+    </ShellFrame>
+  );
 }
 
-function ClientApp() {
+function ShellFrame({
+  children,
+  updateResult,
+  isUpdating,
+  updateProgress,
+  onInstallUpdate
+}: {
+  children: React.ReactNode;
+  updateResult: UpdateResult | null;
+  isUpdating: boolean;
+  updateProgress: string;
+  onInstallUpdate: () => void;
+}) {
+  return (
+    <>
+      <UpdateNotice updateResult={updateResult} isUpdating={isUpdating} updateProgress={updateProgress} onInstallUpdate={onInstallUpdate} />
+      {children}
+    </>
+  );
+}
+
+function ClientApp({ onGoAdmin }: { onGoAdmin: () => void }) {
   const [booting, setBooting] = useState(true);
   const [session, setSession] = useState<AppSession | null>(null);
   const [toast, setToast] = useState<Toast>(null);
@@ -78,9 +251,7 @@ function ClientApp() {
   const [agentResult, setAgentResult] = useState<unknown>(null);
   const [activeSection, setActiveSection] = useState<SectionId>('quick');
   const [showTicketForm, setShowTicketForm] = useState(false);
-  const [pairingCode, setPairingCode] = useState('DEMO-PAIR');
-  const [deviceName, setDeviceName] = useState('');
-  const [clientName, setClientName] = useState('');
+  const [pairingCode, setPairingCode] = useState('');
   const [ticketIssue, setTicketIssue] = useState('Mi PC necesita asistencia.');
   const [ticketCategory, setTicketCategory] = useState('Hardware');
   const [ticketUrgency, setTicketUrgency] = useState<Priority>('normal');
@@ -112,7 +283,6 @@ function ClientApp() {
         const restored = await appBackend.bootstrap();
         if (alive) {
           setSession(restored);
-          if (restored?.displayName) setDeviceName(restored.displayName);
         }
       } catch {
         if (alive) setSession(null);
@@ -240,7 +410,7 @@ function ClientApp() {
 
   async function handleRequestRemoteSupport() {
     const deviceId = session?.deviceId ?? clientDashboard?.device?.id;
-    const deviceLabel = deviceName || clientDashboard?.device?.displayName || session?.displayName || 'Equipo activo';
+    const deviceLabel = clientDashboard?.device?.displayName || session?.displayName || 'Equipo activo';
 
     if (!session?.deviceToken || !deviceId) {
       notify('Activar el equipo primero.', 'warn');
@@ -283,7 +453,7 @@ function ClientApp() {
 
   async function handleCreateTicket() {
     const deviceId = session?.deviceId ?? clientDashboard?.device?.id;
-    const deviceLabel = deviceName || clientDashboard?.device?.displayName || session?.displayName || 'Equipo activo';
+    const deviceLabel = clientDashboard?.device?.displayName || session?.displayName || 'Equipo activo';
 
     if (!session?.deviceToken || !deviceId) {
       notify('Activar el equipo primero.', 'warn');
@@ -317,20 +487,20 @@ function ClientApp() {
     event.preventDefault();
     setIsBusy(true);
     try {
-      const computerName = window.navigator.platform || 'Windows';
-      const userName = clientName.trim() || window.navigator.userAgent || 'Usuario';
+      const userAgentData = window.navigator as Navigator & { userAgentData?: { platform?: string } };
+      const platform = userAgentData.userAgentData?.platform || window.navigator.platform || 'desktop';
+      const computerName = window.navigator.platform || platform || 'Windows';
+      const deviceName = `${platform} - ${computerName}`.replace(/\s+/g, ' ').trim() || 'Equipo';
       const result = await appBackend.registerClient({
         pairingCode,
-        deviceName: deviceName.trim() || 'Equipo',
+        deviceName,
         computerName,
-        userName,
-        os: window.navigator.platform || 'Windows',
-        platform: window.navigator.platform || 'desktop'
+        userName: 'Usuario',
+        os: platform || 'Windows',
+        platform: platform || 'desktop'
       });
 
       setSession(result.session);
-      setDeviceName(result.device.displayName);
-      setClientName(result.device.userName);
       setShowTicketForm(false);
       setActiveSection('quick');
       notify(`Equipo vinculado: ${result.device.displayName}`, 'ok');
@@ -519,12 +689,9 @@ function ClientApp() {
       <ClientActivation
         pairingCode={pairingCode}
         setPairingCode={setPairingCode}
-        deviceName={deviceName}
-        setDeviceName={setDeviceName}
-        clientName={clientName}
-        setClientName={setClientName}
         isBusy={isBusy}
         onSubmit={handleActivateClient}
+        onBrandDoubleClick={onGoAdmin}
       />
     );
   }
@@ -570,7 +737,7 @@ function ClientApp() {
   );
 }
 
-function AdminApp() {
+function AdminApp({ initialEmail, onGoClient, onGoAdmin }: { initialEmail?: string; onGoClient: () => void; onGoAdmin: () => void }) {
   const [session, setSession] = useState<AppSession | null>(null);
   const [clientSessionActive, setClientSessionActive] = useState(false);
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
@@ -579,8 +746,8 @@ function AdminApp() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateProgress, setUpdateProgress] = useState('');
   const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
-  const [email, setEmail] = useState('admin@underdock.local');
-  const [orgName, setOrgName] = useState('UnderDock Demo');
+  const [email, setEmail] = useState(initialEmail ?? (backendConfig.backendKind === 'local' ? 'admin@underdock.local' : ''));
+  const [orgName, setOrgName] = useState(backendConfig.backendKind === 'local' ? 'UnderDock Demo' : '');
   const [password, setPassword] = useState('');
   const [generatedCode, setGeneratedCode] = useState<PairingCodeRecord | null>(null);
   const [selectedPage, setSelectedPage] = useState<AdminPage>('devices');
@@ -745,6 +912,8 @@ function AdminApp() {
         isBusy={isBusy}
         clientStatusLabel={clientSessionActive ? 'Sesion cliente activa' : 'Sesion cliente inactiva'}
         adminStatusLabel="Admin no iniciado"
+        onGoClient={onGoClient}
+        onBrandDoubleClick={onGoAdmin}
       />
     );
   }

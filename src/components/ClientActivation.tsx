@@ -5,26 +5,20 @@ import { CustomTitlebar } from './CustomTitlebar';
 export function ClientActivation({
   pairingCode,
   setPairingCode,
-  deviceName,
-  setDeviceName,
-  clientName,
-  setClientName,
   isBusy,
-  onSubmit
+  onSubmit,
+  onBrandDoubleClick
 }: {
   pairingCode: string;
   setPairingCode: (value: string) => void;
-  deviceName: string;
-  setDeviceName: (value: string) => void;
-  clientName: string;
-  setClientName: (value: string) => void;
   isBusy: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onBrandDoubleClick?: () => void;
 }) {
   return (
     <main className="page-shell">
       <div className="shell-backdrop" />
-      <CustomTitlebar title="UnderDock" subtitle="Vincular equipo" status="Cliente no activado" />
+      <CustomTitlebar title="UnderDock" subtitle="Vincular equipo" status="Cliente no activado" onBrandDoubleClick={onBrandDoubleClick} />
 
       <section className="auth-shell">
         <form className="auth-card panel" onSubmit={onSubmit}>
@@ -44,14 +38,6 @@ export function ClientActivation({
             <label>
               <span>Codigo de vinculacion</span>
               <input value={pairingCode} onChange={(event) => setPairingCode(event.target.value)} autoComplete="off" />
-            </label>
-            <label>
-              <span>Nombre del equipo</span>
-              <input value={deviceName} onChange={(event) => setDeviceName(event.target.value)} autoComplete="off" />
-            </label>
-            <label>
-              <span>Nombre de usuario</span>
-              <input value={clientName} onChange={(event) => setClientName(event.target.value)} autoComplete="name" />
             </label>
           </div>
 
