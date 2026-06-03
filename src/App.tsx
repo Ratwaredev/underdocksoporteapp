@@ -1,17 +1,6 @@
-﻿import { useEffect, useMemo, useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
-import {
-  Bell,
-  CheckCircle2,
-  Download,
-  Globe2,
-  KeyRound,
-  RefreshCw,
-  ShieldCheck,
-  TerminalSquare,
-  Trash2,
-  Wifi
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import type { FormEvent } from 'react';
+import { Bell, Download, RefreshCw, ShieldCheck } from 'lucide-react';
 import { appBackend } from './lib/backend';
 import type {
   AdminDashboard,
@@ -20,19 +9,25 @@ import type {
   DiagnosticRecord,
   PairingCodeRecord,
   Priority,
+  ReleaseRecord,
   TicketRecord,
   UpdateResult
 } from './lib/domain';
 import { APP_VERSION } from './lib/domain';
 import { DiagnosticReport, runQuickDiagnostic } from './lib/diagnostics';
-import { openAdminWindow } from './lib/admin';
-import { checkForUpdates as checkNativeUpdates, installLatestUpdate as installNativeUpdate } from './lib/updates';
 import { openRemoteTool, RemoteSession } from './lib/support';
-import { AgentActionResult, AgentStatus, getAgentStatus, runAgentAction } from './lib/agent';
+import { checkForUpdates as checkNativeUpdates, installLatestUpdate as installNativeUpdate } from './lib/updates';
+import { getAgentStatus, runAgentAction } from './lib/agent';
+import { AdminDevicesPage } from './components/AdminDevicesPage';
+import { AdminLayout } from './components/AdminLayout';
+import { AdminLogin } from './components/AdminLogin';
+import { ClientActivation } from './components/ClientActivation';
+import { ClientHome } from './components/ClientHome';
 
 type Toast = { message: string; tone?: 'neutral' | 'ok' | 'warn' | 'danger' } | null;
 type AppView = 'client' | 'admin';
 type SectionId = 'remote' | 'ticket' | 'quick' | 'advanced' | 'cleaner';
+type AdminPage = 'devices' | 'tickets' | 'sessions' | 'diagnostics' | 'settings';
 
 type QuickCheckItem = {
   id: string;
@@ -80,11 +75,13 @@ function ClientApp() {
   const [clientDashboard, setClientDashboard] = useState<ClientDashboard | null>(null);
   const [diagnostic, setDiagnostic] = useState<DiagnosticReport | null>(null);
   const [remoteSession, setRemoteSession] = useState<RemoteSession | null>(null);
-  const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
-  const [agentResult, setAgentResult] = useState<AgentActionResult | null>(null);
+  const [agentResult, setAgentResult] = useState<unknown>(null);
   const [activeSection, setActiveSection] = useState<SectionId>('quick');
   const [showTicketForm, setShowTicketForm] = useState(false);
-  const [ticketIssue, setTicketIssue] = useState('Mi PC tiene un problema y necesito ayuda.');
+  const [pairingCode, setPairingCode] = useState('DEMO-PAIR');
+  const [deviceName, setDeviceName] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [ticketIssue, setTicketIssue] = useState('Mi PC necesita asistencia.');
   const [ticketCategory, setTicketCategory] = useState('Hardware');
   const [ticketUrgency, setTicketUrgency] = useState<Priority>('normal');
   const [ticketDescription, setTicketDescription] = useState('');
@@ -113,7 +110,10 @@ function ClientApp() {
     (async () => {
       try {
         const restored = await appBackend.bootstrap();
-        if (alive) setSession(restored);
+        if (alive) {
+          setSession(restored);
+          if (restored?.displayName) setDeviceName(restored.displayName);
+        }
       } catch {
         if (alive) setSession(null);
       } finally {
@@ -131,11 +131,6 @@ function ClientApp() {
       const result = await checkNativeUpdates();
       if (!alive) return;
       setUpdateResult(result);
-      if (result.status === 'available') {
-        notify(`Hay una actualización disponible: ${result.nextVersion ?? 'nueva versión'}`, 'warn');
-      } else if (result.status === 'error') {
-        notify(result.notes, 'danger');
-      }
     })();
     return () => {
       alive = false;
@@ -157,10 +152,9 @@ function ClientApp() {
     let alive = true;
     (async () => {
       try {
-        const status = await getAgentStatus();
-        if (alive) setAgentStatus(status);
+        await getAgentStatus();
       } catch {
-        if (alive) setAgentStatus(null);
+        if (!alive) return;
       }
     })();
     return () => {
@@ -233,17 +227,12 @@ function ClientApp() {
       const result = await checkNativeUpdates();
       setUpdateResult(result);
       if (result.status === 'available') {
-        notify(`Actualización disponible: ${result.nextVersion}. Instalando...`, 'warn');
-        await handleNativeUpdateInstall();
-        return;
-      }
-
-      if (result.status === 'error') {
+        notify(`Actualizacion disponible: ${result.nextVersion}.`, 'warn');
+      } else if (result.status === 'error') {
         notify(result.notes, 'danger');
-        return;
+      } else {
+        notify(result.notes || 'Todo al dia.', 'ok');
       }
-
-      notify(result.notes || 'Todo al día.', 'ok');
     } catch {
       notify('No se pudo comprobar actualizaciones.', 'danger');
     }
@@ -251,10 +240,10 @@ function ClientApp() {
 
   async function handleRequestRemoteSupport() {
     const deviceId = session?.deviceId ?? clientDashboard?.device?.id;
-    const deviceName = clientDashboard?.device?.displayName ?? session?.displayName ?? 'Equipo activo';
+    const deviceLabel = deviceName || clientDashboard?.device?.displayName || session?.displayName || 'Equipo activo';
 
     if (!session?.deviceToken || !deviceId) {
-      notify('Activá el equipo con un código para pedir soporte remoto.', 'warn');
+      notify('Activar el equipo primero.', 'warn');
       return;
     }
 
@@ -265,7 +254,7 @@ function ClientApp() {
         {
           deviceId,
           issue: issueSummary,
-          clientName: deviceName,
+          clientName: deviceLabel,
           priority: ticketUrgency
         },
         session.deviceToken
@@ -276,16 +265,15 @@ function ClientApp() {
         session.deviceToken
       );
 
-      const latest = {
+      setRemoteSession({
         code: supportSession.code,
         expiresInMinutes: supportSession.expiresInMinutes,
         instructions: supportSession.instructions
-      };
-      setRemoteSession(latest);
+      });
       setActiveSection('remote');
       await refreshClient(session.deviceToken);
       await handleOpenRemote();
-      notify(`Ticket ${ticket.id} creado y listo para remoto.`, 'ok');
+      notify(`Ticket ${ticket.id} listo para remoto.`, 'ok');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'No se pudo pedir soporte.', 'danger');
     } finally {
@@ -295,10 +283,10 @@ function ClientApp() {
 
   async function handleCreateTicket() {
     const deviceId = session?.deviceId ?? clientDashboard?.device?.id;
-    const deviceName = clientDashboard?.device?.displayName ?? session?.displayName ?? 'Equipo activo';
+    const deviceLabel = deviceName || clientDashboard?.device?.displayName || session?.displayName || 'Equipo activo';
 
     if (!session?.deviceToken || !deviceId) {
-      notify('Activá el equipo con un código para crear tickets.', 'warn');
+      notify('Activar el equipo primero.', 'warn');
       return;
     }
 
@@ -309,7 +297,7 @@ function ClientApp() {
         {
           deviceId,
           issue: issueSummary,
-          clientName: deviceName,
+          clientName: deviceLabel,
           priority: ticketUrgency
         },
         session.deviceToken
@@ -320,6 +308,34 @@ function ClientApp() {
       await refreshClient(session.deviceToken);
     } catch (error) {
       notify(error instanceof Error ? error.message : 'No se pudo crear el ticket.', 'danger');
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleActivateClient(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsBusy(true);
+    try {
+      const computerName = window.navigator.platform || 'Windows';
+      const userName = clientName.trim() || window.navigator.userAgent || 'Usuario';
+      const result = await appBackend.registerClient({
+        pairingCode,
+        deviceName: deviceName.trim() || 'Equipo',
+        computerName,
+        userName,
+        os: window.navigator.platform || 'Windows',
+        platform: window.navigator.platform || 'desktop'
+      });
+
+      setSession(result.session);
+      setDeviceName(result.device.displayName);
+      setClientName(result.device.userName);
+      setShowTicketForm(false);
+      setActiveSection('quick');
+      notify(`Equipo vinculado: ${result.device.displayName}`, 'ok');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'No se pudo activar el equipo.', 'danger');
     } finally {
       setIsBusy(false);
     }
@@ -341,13 +357,13 @@ function ClientApp() {
           session.deviceToken
         );
         await refreshClient(session.deviceToken);
-        notify('Diagnóstico rápido guardado.', 'ok');
+        notify('Diagnostico rapido guardado.', 'ok');
         return;
       }
 
-      notify('Diagnóstico rápido completado en esta PC.', 'ok');
+      notify('Diagnostico rapido completado.', 'ok');
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'No se pudo ejecutar el diagnóstico.', 'danger');
+      notify(error instanceof Error ? error.message : 'No se pudo ejecutar el diagnostico.', 'danger');
     } finally {
       setIsBusy(false);
     }
@@ -357,8 +373,8 @@ function ClientApp() {
     setAdvancedDiagnostic((current) => ({
       ...current,
       running: true,
-      progress: 'Preparando recolección avanzada...',
-      summary: 'Este proceso puede tardar un poco más.',
+      progress: 'Preparando recoleccion avanzada...',
+      summary: 'Este proceso puede tardar un poco mas.',
       result: null
     }));
     setActiveSection('advanced');
@@ -377,7 +393,7 @@ function ClientApp() {
       setAdvancedDiagnostic({
         running: false,
         progress: 'Informe listo.',
-        summary: 'Generado para envío al técnico.',
+        summary: 'Generado para envio al tecnico.',
         result: enriched
       });
       setDiagnostic(enriched);
@@ -391,7 +407,7 @@ function ClientApp() {
         );
         await refreshClient(session.deviceToken);
       }
-      notify('Diagnóstico avanzado completado.', 'ok');
+      notify('Diagnostico avanzado completado.', 'ok');
     } catch (error) {
       setAdvancedDiagnostic((current) => ({
         ...current,
@@ -400,7 +416,7 @@ function ClientApp() {
         summary: 'No se pudo completar el informe.',
         result: null
       }));
-      notify(error instanceof Error ? error.message : 'No se pudo ejecutar el diagnóstico avanzado.', 'danger');
+      notify(error instanceof Error ? error.message : 'No se pudo ejecutar el diagnostico avanzado.', 'danger');
     }
   }
 
@@ -425,7 +441,7 @@ function ClientApp() {
       setAgentResult(result);
       notify(result.message, result.ok ? 'ok' : 'warn');
     } catch (error) {
-      notify(error instanceof Error ? error.message : 'No se pudo limpiar la selección.', 'danger');
+      notify(error instanceof Error ? error.message : 'No se pudo limpiar la seleccion.', 'danger');
     } finally {
       setIsBusy(false);
     }
@@ -437,14 +453,6 @@ function ClientApp() {
       notify(message, 'neutral');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'No se pudo abrir la herramienta remota.', 'danger');
-    }
-  }
-
-  async function handleOpenAdminPanel() {
-    try {
-      await openAdminWindow();
-    } catch (error) {
-      notify(error instanceof Error ? error.message : 'No se pudo abrir el panel interno.', 'danger');
     }
   }
 
@@ -475,7 +483,7 @@ function ClientApp() {
 
     return {
       version: APP_VERSION,
-      lastDiagnostic: latestDiagnostic?.generatedAt ?? 'Sin revisión',
+      lastDiagnostic: latestDiagnostic?.generatedAt ?? 'Sin revision',
       machine: report?.computerName ?? session?.displayName ?? 'Equipo activo',
       cpu: report?.cpu ?? 'Sin dato',
       cpuTone: report?.cpu ? 'ok' : 'neutral',
@@ -487,167 +495,84 @@ function ClientApp() {
       diskTone: diskUsage == null ? 'neutral' : diskUsage >= 90 ? 'danger' : diskUsage >= 80 ? 'warn' : 'ok',
       security: report?.defenderStatus ?? 'Pendiente',
       securityTone: report?.defenderStatus?.toLowerCase().includes('desactiv') ? 'danger' : report?.defenderStatus ? 'ok' : 'neutral',
-      stability: report?.pendingReboot ? 'Reinicio pendiente' : report ? 'Sin alertas críticas' : 'Esperando diagnóstico'
+      stability: report?.pendingReboot ? 'Reinicio pendiente' : report ? 'Sin alertas criticas' : 'Esperando diagnostico'
     };
   }, [healthReport, latestDiagnostic, session?.displayName]);
 
   const quickChecks = useMemo<QuickCheckItem[]>(() => {
     return [
-      {
-        id: 'cpu',
-        label: 'CPU',
-        value: healthSummary.cpu,
-        tone: healthSummary.cpuTone
-      },
-      {
-        id: 'temp',
-        label: 'Temperatura',
-        value: healthSummary.temp,
-        tone: healthSummary.tempTone
-      },
-      {
-        id: 'ram',
-        label: 'RAM',
-        value: healthSummary.ram,
-        tone: healthSummary.ramTone
-      },
-      {
-        id: 'disk',
-        label: 'Disco',
-        value: healthSummary.disk,
-        tone: healthSummary.diskTone
-      },
-      {
-        id: 'defender',
-        label: 'Seguridad',
-        value: healthSummary.security,
-        tone: healthSummary.securityTone
-      },
-      {
-        id: 'stability',
-        label: 'Estado',
-        value: healthSummary.stability,
-        tone: healthSummary.stability.includes('Reinicio') ? 'warn' : healthReport ? 'ok' : 'neutral'
-      }
+      { id: 'cpu', label: 'CPU', value: healthSummary.cpu, tone: healthSummary.cpuTone },
+      { id: 'temp', label: 'Temperatura', value: healthSummary.temp, tone: healthSummary.tempTone },
+      { id: 'ram', label: 'RAM', value: healthSummary.ram, tone: healthSummary.ramTone },
+      { id: 'disk', label: 'Disco', value: healthSummary.disk, tone: healthSummary.diskTone },
+      { id: 'defender', label: 'Seguridad', value: healthSummary.security, tone: healthSummary.securityTone },
+      { id: 'stability', label: 'Estado', value: healthSummary.stability, tone: healthSummary.stability.includes('Reinicio') ? 'warn' : healthReport ? 'ok' : 'neutral' }
     ];
   }, [healthReport, healthSummary]);
 
   if (booting) {
+    return <ShellBoot label="Iniciando cliente" subtitle="Cargando estado, diagnosticos y soporte remoto." />;
+  }
+
+  if (!session) {
     return (
-      <main className="app-shell">
-        <div className="app-shell__bg" />
-        <div className="app-shell__scan" />
-        <div className="app-shell__frame" />
-        <section className="boot-panel">
-          <div className="panel">
-            <p className="eyebrow">BOOT</p>
-            <h1>UnderDock</h1>
-            <p>Preparando soporte remoto, diagnóstico y mantenimiento.</p>
-          </div>
-        </section>
-        <VersionFooter />
-      </main>
+      <ClientActivation
+        pairingCode={pairingCode}
+        setPairingCode={setPairingCode}
+        deviceName={deviceName}
+        setDeviceName={setDeviceName}
+        clientName={clientName}
+        setClientName={setClientName}
+        isBusy={isBusy}
+        onSubmit={handleActivateClient}
+      />
     );
   }
 
   return (
-    <main className="app-shell">
-      <div className="app-shell__bg" />
-      <div className="app-shell__scan" />
-      <div className="app-shell__frame" />
-
-      <header className="shell-header panel">
-        <div className="brand-block">
-          <div className="brand-mark" aria-hidden="true">
-            <span />
-          </div>
-          <div>
-            <h1>UnderDock</h1>
-            <p>Soporte técnico remoto</p>
-          </div>
-        </div>
-
-        <div className="status-strip">
-          <StatusItem label="Versión" value={`v${healthSummary.version}`} tone="neutral" />
-          <StatusItem label="Última revisión" value={healthSummary.lastDiagnostic} tone="neutral" />
-        </div>
-
-        <div className="header-actions">
-          <button className="btn btn-ghost" onClick={handleRefresh} disabled={isBusy || isUpdating}>
-            <RefreshCw size={16} /> Actualizar
-          </button>
-          <button className="btn btn-ghost btn-quiet" onClick={handleSignOut}>
-            Salir
-          </button>
-        </div>
-      </header>
-
-      <section className="dashboard-grid">
-        <SystemStatusPanel
-          status={healthSummary}
-          updateResult={updateResult}
-          isUpdating={isUpdating}
-          updateProgress={updateProgress}
-          onUpdateInstall={handleNativeUpdateInstall}
-        />
-
-        <HomeDashboard
-          activeSection={activeSection}
-          onSelectSection={setActiveSection}
-          onOpenRemote={handleRequestRemoteSupport}
-          onCreateTicket={() => {
-            setShowTicketForm(true);
-            setActiveSection('ticket');
-          }}
-          onQuickDiagnostic={handleRunQuickDiagnostic}
-          onAdvancedDiagnostic={handleRunAdvancedDiagnostic}
-          onOpenCleaner={() => setActiveSection('cleaner')}
-          showTicketForm={showTicketForm}
-        />
-
-        <DetailPanel
-          activeSection={activeSection}
-          session={session}
-          clientDashboard={clientDashboard}
-          remoteSession={remoteSession}
-          ticketIssue={ticketIssue}
-          setTicketIssue={setTicketIssue}
-          ticketCategory={ticketCategory}
-          setTicketCategory={setTicketCategory}
-          ticketUrgency={ticketUrgency}
-          setTicketUrgency={setTicketUrgency}
-          ticketDescription={ticketDescription}
-          setTicketDescription={setTicketDescription}
-          showTicketForm={showTicketForm}
-          setShowTicketForm={setShowTicketForm}
-          quickChecks={quickChecks}
-          quickDiagnostic={quickDiagnostic ?? diagnostic}
-          advancedDiagnostic={advancedDiagnostic}
-          cleanerSelection={cleanerSelection}
-          setCleanerSelection={setCleanerSelection}
-          isBusy={isBusy}
-          onRequestRemoteSupport={handleRequestRemoteSupport}
-          onCreateTicket={handleCreateTicket}
-          onRunQuickDiagnostic={handleRunQuickDiagnostic}
-          onRunAdvancedDiagnostic={handleRunAdvancedDiagnostic}
-          onCleanerAnalyze={handleCleanerAnalyze}
-          onCleanerRun={handleCleanerRun}
-          onOpenRemote={handleOpenRemote}
-          onGoHome={() => {
-            setShowTicketForm(false);
-            setActiveSection('quick');
-          }}
-        />
-      </section>
-
-      {toast && <ToastBar toast={toast} />}
-      <VersionFooter />
-    </main>
+    <ClientHome
+      session={session}
+      clientDashboard={clientDashboard}
+      remoteSession={remoteSession}
+      updateResult={updateResult}
+      isUpdating={isUpdating}
+      updateProgress={updateProgress}
+      isBusy={isBusy}
+      activeSection={activeSection}
+      showTicketForm={showTicketForm}
+      setShowTicketForm={setShowTicketForm}
+      ticketIssue={ticketIssue}
+      setTicketIssue={setTicketIssue}
+      ticketCategory={ticketCategory}
+      setTicketCategory={setTicketCategory}
+      ticketUrgency={ticketUrgency}
+      setTicketUrgency={setTicketUrgency}
+      ticketDescription={ticketDescription}
+      setTicketDescription={setTicketDescription}
+      cleanerSelection={cleanerSelection}
+      setCleanerSelection={setCleanerSelection}
+      quickChecks={quickChecks}
+      quickDiagnostic={quickDiagnostic ?? diagnostic}
+      advancedDiagnostic={advancedDiagnostic}
+      onSelectSection={setActiveSection}
+      onRequestRemoteSupport={handleRequestRemoteSupport}
+      onCreateTicket={handleCreateTicket}
+      onRunQuickDiagnostic={handleRunQuickDiagnostic}
+      onRunAdvancedDiagnostic={handleRunAdvancedDiagnostic}
+      onCleanerAnalyze={handleCleanerAnalyze}
+      onCleanerRun={handleCleanerRun}
+      onOpenRemote={handleOpenRemote}
+      onRefresh={handleRefresh}
+      onSignOut={handleSignOut}
+      onInstallUpdate={handleNativeUpdateInstall}
+      agentResult={agentResult}
+    />
   );
 }
 
 function AdminApp() {
   const [session, setSession] = useState<AppSession | null>(null);
+  const [clientSessionActive, setClientSessionActive] = useState(false);
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -658,6 +583,8 @@ function AdminApp() {
   const [orgName, setOrgName] = useState('UnderDock Demo');
   const [password, setPassword] = useState('');
   const [generatedCode, setGeneratedCode] = useState<PairingCodeRecord | null>(null);
+  const [selectedPage, setSelectedPage] = useState<AdminPage>('devices');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -665,6 +592,21 @@ function AdminApp() {
       const result = await checkNativeUpdates();
       if (!alive) return;
       setUpdateResult(result);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const restored = await appBackend.bootstrap();
+        if (alive) setClientSessionActive(Boolean(restored?.deviceToken));
+      } catch {
+        if (alive) setClientSessionActive(false);
+      }
     })();
     return () => {
       alive = false;
@@ -700,7 +642,7 @@ function AdminApp() {
       const result = await appBackend.signInAdmin(email.trim(), password, orgName.trim());
       setSession(result.session);
       setPassword('');
-      notify('Panel admin activado.', 'ok');
+      notify('Acceso admin concedido.', 'ok');
       await loadDashboard();
     } catch (error) {
       notify(error instanceof Error ? error.message : 'No se pudo iniciar sesion admin.', 'danger');
@@ -763,73 +705,6 @@ function AdminApp() {
     }
   }
 
-  if (!session) {
-    return (
-      <main className="app-shell admin-shell">
-        <div className="app-shell__bg" />
-        <div className="app-shell__scan" />
-        <div className="app-shell__frame" />
-
-        <header className="shell-header panel">
-          <div className="brand-block">
-            <div className="brand-mark" aria-hidden="true">
-              <span />
-            </div>
-            <div>
-              <h1>UnderDock</h1>
-              <p>Panel interno</p>
-            </div>
-          </div>
-
-          <div className="status-strip">
-            <StatusItem label="Acceso" value="Admin" tone="neutral" />
-            <StatusItem label="Versión" value={`v${APP_VERSION}`} tone="neutral" />
-          </div>
-        </header>
-
-        <section className="admin-login panel">
-          <div className="section-head">
-            <div>
-              <p className="eyebrow">Administrador</p>
-              <h2>Acceso interno</h2>
-            </div>
-            <span className="subtle">Separado de la pantalla cliente</span>
-          </div>
-
-          <p className="lead">Este panel no comparte sesión con el equipo cliente. Iniciá sesión solo si vas a administrar equipos, tickets y activación.</p>
-
-          <form className="admin-login-form" onSubmit={handleSignIn}>
-            <label>
-              <span>Email</span>
-              <input value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" />
-            </label>
-            <label>
-              <span>Equipo</span>
-              <input value={orgName} onChange={(event) => setOrgName(event.target.value)} autoComplete="organization" />
-            </label>
-            <label>
-              <span>Contraseña</span>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="current-password"
-              />
-            </label>
-            <div className="button-row">
-              <button className="btn btn-primary" type="submit" disabled={isBusy}>
-                <KeyRound size={16} /> Ingresar
-              </button>
-            </div>
-          </form>
-        </section>
-
-        {toast && <ToastBar toast={toast} />}
-        <VersionFooter />
-      </main>
-    );
-  }
-
   const counts = {
     devices: dashboard?.devices.length ?? 0,
     tickets: dashboard?.tickets.length ?? 0,
@@ -837,602 +712,241 @@ function AdminApp() {
     codes: dashboard?.pairingCodes.length ?? 0
   };
 
-  return (
-    <main className="app-shell admin-shell">
-      <div className="app-shell__bg" />
-      <div className="app-shell__scan" />
-      <div className="app-shell__frame" />
+  const filteredDevices = (dashboard?.devices ?? []).filter((device) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return [device.displayName, device.computerName, device.userName, device.orgName, device.status, device.os].some((value) =>
+      value.toLowerCase().includes(q)
+    );
+  });
 
-      <header className="shell-header panel">
-        <div className="brand-block">
+  const filteredTickets = (dashboard?.tickets ?? []).filter((ticket) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return [ticket.id, ticket.issue, ticket.status, ticket.clientName].some((value) => value.toLowerCase().includes(q));
+  });
+
+  const filteredDiagnostics = (dashboard?.diagnostics ?? []).filter((diagnostic) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return [diagnostic.id, diagnostic.deviceId].some((value) => value.toLowerCase().includes(q));
+  });
+
+  if (!session) {
+    return (
+      <AdminLogin
+        email={email}
+        setEmail={setEmail}
+        orgName={orgName}
+        setOrgName={setOrgName}
+        password={password}
+        setPassword={setPassword}
+        onSubmit={handleSignIn}
+        isBusy={isBusy}
+        clientStatusLabel={clientSessionActive ? 'Sesion cliente activa' : 'Sesion cliente inactiva'}
+        adminStatusLabel="Admin no iniciado"
+      />
+    );
+  }
+
+  return (
+    <AdminLayout
+      session={session}
+      selectedPage={selectedPage}
+      setSelectedPage={setSelectedPage}
+      searchQuery={searchQuery}
+      setSearchQuery={setSearchQuery}
+      isBusy={isBusy}
+      updateResult={updateResult}
+      isUpdating={isUpdating}
+      updateProgress={updateProgress}
+      counts={counts}
+      onRefresh={handleRefreshAdmin}
+      onSignOut={handleSignOutAdmin}
+      onInstallUpdate={handleInstallUpdate}
+    >
+      {selectedPage === 'devices' && (
+        <AdminDevicesPage
+          dashboard={dashboard}
+          filteredDevices={filteredDevices}
+          generatedCode={generatedCode}
+          isBusy={isBusy}
+          onGeneratePairingCode={handleGeneratePairingCode}
+          onCopyCode={async () => {
+            if (generatedCode?.code) {
+              await copyText(generatedCode.code);
+              notify('Codigo copiado.', 'ok');
+            }
+          }}
+          onOpenRemoteTool={async () => {
+            const message = await openRemoteTool();
+            notify(message, 'neutral');
+          }}
+          onShowDiagnostics={() => setSelectedPage('diagnostics')}
+        />
+      )}
+
+      {selectedPage === 'tickets' && (
+        <SimpleAdminPage
+          title="Tickets"
+          eyebrow="Mesa de ayuda"
+          description="Lista directa para revisar estados y priorizar casos."
+          rows={filteredTickets.map((ticket) => ({
+            primary: ticket.id,
+            secondary: `${ticket.clientName} · ${ticket.priority}`,
+            meta: ticket.status
+          }))}
+        />
+      )}
+
+      {selectedPage === 'sessions' && (
+        <SimpleAdminPage
+          title="Sesiones remotas"
+          eyebrow="Soporte remoto"
+          description="Sesiones activas y referencias del ticket asociado."
+          rows={(dashboard?.tickets ?? [])
+            .filter((ticket) => Boolean(ticket.remoteCode))
+            .map((ticket) => ({
+              primary: ticket.remoteCode ?? ticket.id,
+              secondary: ticket.issue,
+              meta: ticket.status
+            }))}
+        />
+      )}
+
+      {selectedPage === 'diagnostics' && (
+        <SimpleAdminPage
+          title="Diagnosticos"
+          eyebrow="Salud"
+          description="Informe compacto de los equipos con actividad reciente."
+          rows={filteredDiagnostics.map((diagnostic) => ({
+            primary: diagnostic.deviceId,
+            secondary: diagnostic.generatedAt,
+            meta: diagnostic.id
+          }))}
+        />
+      )}
+
+      {selectedPage === 'settings' && (
+        <div className="panel stack-panel">
+          <div className="stack-panel__head">
+            <div>
+              <p className="eyebrow">Configuracion</p>
+              <h2>Panel admin</h2>
+            </div>
+          </div>
+          <div className="settings-grid">
+            <InfoCard label="Equipo" value={session.orgName ?? 'Sin equipo'} />
+            <InfoCard label="Email" value={session.email ?? 'Admin'} />
+            <InfoCard label="Version" value={`v${APP_VERSION}`} />
+            <InfoCard label="Equipos" value={`${counts.devices}`} />
+          </div>
+          {updateResult?.status === 'available' && (
+            <div className="subtle-card">
+              <strong>Actualizacion disponible</strong>
+              <p>{updateResult.notes}</p>
+              <button className="btn btn-primary" onClick={handleInstallUpdate} disabled={isUpdating}>
+                <Download size={16} /> {isUpdating ? updateProgress || 'Aplicando' : 'Actualizar y reiniciar'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {toast && <ToastBar toast={toast} />}
+      <VersionFooter />
+    </AdminLayout>
+  );
+}
+
+async function copyText(value: string) {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+}
+
+function ShellBoot({ label, subtitle }: { label: string; subtitle: string }) {
+  return (
+    <main className="page-shell page-shell--centered">
+      <div className="shell-backdrop" />
+      <section className="panel boot-panel">
+        <div className="brand-lockup">
           <div className="brand-mark" aria-hidden="true">
             <span />
           </div>
           <div>
-            <h1>UnderDock Admin</h1>
-            <p>Administración interna</p>
+            <p className="eyebrow">{label}</p>
+            <h1>UnderDock</h1>
+            <p>{subtitle}</p>
           </div>
         </div>
-
-        <div className="status-strip">
-          <StatusItem label="Sesión" value={session.email ?? 'Admin'} tone="neutral" />
-          <StatusItem label="Equipo" value={session.orgName ?? 'Sin equipo'} tone="neutral" />
-          <StatusItem label="Versión" value={`v${APP_VERSION}`} tone="neutral" />
-          <StatusItem label="Equipos" value={`${counts.devices}`} tone="neutral" />
-        </div>
-
-        <div className="header-actions">
-          <button className="btn btn-ghost" onClick={handleRefreshAdmin} disabled={isBusy || isUpdating}>
-            <RefreshCw size={16} /> Actualizar
-          </button>
-          <button className="btn btn-ghost btn-quiet" onClick={handleSignOutAdmin}>
-            Salir
-          </button>
-        </div>
-      </header>
-
-      <section className="admin-grid">
-        <section className="panel admin-summary">
-          <div className="section-head">
-            <div>
-              <p className="eyebrow">Resumen</p>
-              <h2>Centro de administración</h2>
-            </div>
-            <span className="subtle">{isBusy ? 'Procesando...' : 'Listo'}</span>
-          </div>
-
-          <div className="status-matrix admin-matrix">
-            <Metric label="Equipos" value={`${counts.devices}`} />
-            <Metric label="Tickets" value={`${counts.tickets}`} />
-            <Metric label="Diagnósticos" value={`${counts.diagnostics}`} />
-            <Metric label="Códigos" value={`${counts.codes}`} />
-          </div>
-
-          <div className="button-row">
-            <button className="btn btn-primary" onClick={handleGeneratePairingCode} disabled={isBusy}>
-              <Download size={16} /> Generar código
-            </button>
-            {updateResult?.status === 'available' && (
-              <button className="btn btn-ghost" onClick={handleInstallUpdate} disabled={isUpdating}>
-                <Download size={16} /> {isUpdating ? updateProgress || 'Instalando' : 'Actualizar app'}
-              </button>
-            )}
-          </div>
-
-          {generatedCode && (
-            <div className="status-note">
-              <ShieldCheck size={16} />
-              <span>Código activo: {generatedCode.code} - vence {generatedCode.expiresAt}</span>
-            </div>
-          )}
-        </section>
-
-        <section className="panel admin-list">
-          <div className="section-head">
-            <div>
-              <p className="eyebrow">Equipos</p>
-              <h2>Actividad reciente</h2>
-            </div>
-          </div>
-          <div className="admin-stack">
-            {(dashboard?.devices ?? []).slice(0, 5).map((device) => (
-              <div className="admin-row" key={device.id}>
-                <div>
-                  <strong>{device.displayName}</strong>
-                  <p>{device.computerName} · {device.os}</p>
-                </div>
-                <span className="pill">{device.status}</span>
-              </div>
-            ))}
-            {(dashboard?.tickets ?? []).slice(0, 5).map((ticket) => (
-              <div className="admin-row" key={ticket.id}>
-                <div>
-                  <strong>{ticket.id}</strong>
-                  <p>{ticket.issue}</p>
-                </div>
-                <span className="pill">{ticket.status}</span>
-              </div>
-            ))}
-          </div>
-        </section>
       </section>
-
-      {toast && <ToastBar toast={toast} />}
       <VersionFooter />
     </main>
   );
 }
 
-function SystemStatusPanel({
-  status,
-  updateResult,
-  isUpdating,
-  updateProgress,
-  onUpdateInstall
-}: {
-  status: {
-    version: string;
-    lastDiagnostic: string;
-    machine: string;
-    cpu: string;
-    cpuTone: 'ok' | 'warn' | 'neutral' | 'danger';
-    temp: string;
-    tempTone: 'ok' | 'warn' | 'neutral' | 'danger';
-    ram: string;
-    ramTone: 'ok' | 'warn' | 'neutral' | 'danger';
-    disk: string;
-    diskTone: 'ok' | 'warn' | 'neutral' | 'danger';
-    security: string;
-    securityTone: 'ok' | 'warn' | 'neutral' | 'danger';
-    stability: string;
-  };
-  updateResult: UpdateResult | null;
-  isUpdating: boolean;
-  updateProgress: string;
-  onUpdateInstall: () => void;
-}) {
-  return (
-    <section className="panel status-panel">
-      <div className="section-head">
-        <div>
-          <p className="eyebrow">Estado del equipo</p>
-          <h2>Salud de la PC</h2>
-        </div>
-        <span className="pill">{status.machine}</span>
-      </div>
-      <div className="status-matrix">
-        <Metric label="CPU" value={status.cpu} tone={status.cpuTone} />
-        <Metric label="Temperatura" value={status.temp} tone={status.tempTone} />
-        <Metric label="RAM" value={status.ram} tone={status.ramTone} />
-        <Metric label="Disco" value={status.disk} tone={status.diskTone} />
-        <Metric label="Seguridad" value={status.security} tone={status.securityTone} />
-        <Metric label="Estado" value={status.stability} tone="neutral" />
-      </div>
-      <div className="status-note">
-        <ShieldCheck size={16} />
-        <span>Última revisión: {status.lastDiagnostic}</span>
-      </div>
-      {updateResult?.status === 'available' && (
-        <div className="update-banner">
-          <div>
-            <strong>Actualización disponible</strong>
-            <p>{isUpdating ? updateProgress || 'Actualizando...' : updateResult.notes}</p>
-          </div>
-          <button className="btn btn-primary" onClick={onUpdateInstall} disabled={isUpdating}>
-            <Download size={16} /> {isUpdating ? updateProgress || 'Instalando' : 'Actualizar'}
-          </button>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function HomeDashboard({
-  activeSection,
-  onSelectSection,
-  onOpenRemote,
-  onCreateTicket,
-  onQuickDiagnostic,
-  onAdvancedDiagnostic,
-  onOpenCleaner,
-  showTicketForm
-}: {
-  activeSection: SectionId;
-  onSelectSection: (section: SectionId) => void;
-  onOpenRemote: () => void;
-  onCreateTicket: () => void;
-  onQuickDiagnostic: () => void;
-  onAdvancedDiagnostic: () => void;
-  onOpenCleaner: () => void;
-  showTicketForm: boolean;
-}) {
-  return (
-    <section className="panel dashboard-panel">
-      <div className="section-head">
-        <div>
-          <p className="eyebrow">Acciones</p>
-          <h2>Centro de soporte</h2>
-        </div>
-        <span className="subtle">{showTicketForm ? 'Formulario abierto' : 'Vista principal'}</span>
-      </div>
-      <div className="action-grid">
-        <PrimaryActionCard
-          active={activeSection === 'remote'}
-          icon={<Wifi size={22} />}
-          title="Soporte remoto"
-          description="Enviá una solicitud para que un técnico se conecte y revise tu PC."
-          buttonLabel="Pedir soporte"
-          stateLabel="Esperando técnico · Conectado · Disponible"
-          onClick={() => {
-            onSelectSection('remote');
-            onOpenRemote();
-          }}
-        />
-        <PrimaryActionCard
-          active={activeSection === 'ticket'}
-          icon={<TerminalSquare size={22} />}
-          title="Crear ticket"
-          description="Contá qué problema tenés y adjuntá detalles del equipo."
-          buttonLabel="Abrir ticket"
-          stateLabel="Formulario simple dentro del panel"
-          onClick={() => {
-            onSelectSection('ticket');
-            onCreateTicket();
-          }}
-        />
-        <PrimaryActionCard
-          active={activeSection === 'quick'}
-          icon={<CheckCircle2 size={22} />}
-          title="Diagnóstico rápido"
-          description="Revisa temperatura, memoria, disco, procesos y estado básico."
-          buttonLabel="Ejecutar rápido"
-          stateLabel="Resultado en chips claros"
-          onClick={() => {
-            onSelectSection('quick');
-            onQuickDiagnostic();
-          }}
-        />
-        <PrimaryActionCard
-          active={activeSection === 'advanced'}
-          icon={<Globe2 size={22} />}
-          title="Diagnóstico avanzado"
-          description="Genera un informe más completo para el técnico."
-          buttonLabel="Ejecutar avanzado"
-          stateLabel="Puede tardar más"
-          onClick={() => {
-            onSelectSection('advanced');
-            onAdvancedDiagnostic();
-          }}
-        />
-        <PrimaryActionCard
-          active={activeSection === 'cleaner'}
-          icon={<Trash2 size={22} />}
-          title="Cleaner"
-          description="Limpieza segura de temporales, caché y revisiones básicas."
-          buttonLabel="Abrir cleaner"
-          stateLabel="Análisis antes de limpiar"
-          onClick={() => {
-            onSelectSection('cleaner');
-            onOpenCleaner();
-          }}
-        />
-      </div>
-    </section>
-  );
-}
-
-function DetailPanel({
-  activeSection,
-  session,
-  clientDashboard,
-  remoteSession,
-  ticketIssue,
-  setTicketIssue,
-  ticketCategory,
-  setTicketCategory,
-  ticketUrgency,
-  setTicketUrgency,
-  ticketDescription,
-  setTicketDescription,
-  showTicketForm,
-  setShowTicketForm,
-  quickChecks,
-  quickDiagnostic,
-  advancedDiagnostic,
-  cleanerSelection,
-  setCleanerSelection,
-  isBusy,
-  onRequestRemoteSupport,
-  onCreateTicket,
-  onRunQuickDiagnostic,
-  onRunAdvancedDiagnostic,
-  onCleanerAnalyze,
-  onCleanerRun,
-  onOpenRemote,
-  onGoHome
-}: {
-  activeSection: SectionId;
-  session: AppSession | null;
-  clientDashboard: ClientDashboard | null;
-  remoteSession: RemoteSession | null;
-  ticketIssue: string;
-  setTicketIssue: (value: string) => void;
-  ticketCategory: string;
-  setTicketCategory: (value: string) => void;
-  ticketUrgency: Priority;
-  setTicketUrgency: (value: Priority) => void;
-  ticketDescription: string;
-  setTicketDescription: (value: string) => void;
-  showTicketForm: boolean;
-  setShowTicketForm: (value: boolean) => void;
-  quickChecks: QuickCheckItem[];
-  quickDiagnostic: DiagnosticReport | null;
-  advancedDiagnostic: { running: boolean; progress: string; summary: string; result: DiagnosticReport | null };
-  cleanerSelection: {
-    tempFiles: boolean;
-    browserCache: boolean;
-    recycleBin: boolean;
-    oldLogs: boolean;
-    startupReview: boolean;
-  };
-  setCleanerSelection: (value: {
-    tempFiles: boolean;
-    browserCache: boolean;
-    recycleBin: boolean;
-    oldLogs: boolean;
-    startupReview: boolean;
-  }) => void;
-  isBusy: boolean;
-  onRequestRemoteSupport: () => void;
-  onCreateTicket: () => void;
-  onRunQuickDiagnostic: () => void;
-  onRunAdvancedDiagnostic: () => void;
-  onCleanerAnalyze: () => void;
-  onCleanerRun: () => void;
-  onOpenRemote: () => void;
-  onGoHome: () => void;
-}) {
-  return (
-    <section className="panel detail-panel">
-      <div className="section-head">
-        <div>
-          <p className="eyebrow">Acción activa</p>
-          <h2>
-            {activeSection === 'remote' && 'Soporte remoto'}
-            {activeSection === 'ticket' && 'Crear ticket'}
-            {activeSection === 'quick' && 'Diagnóstico rápido'}
-            {activeSection === 'advanced' && 'Diagnóstico avanzado'}
-            {activeSection === 'cleaner' && 'Cleaner'}
-          </h2>
-        </div>
-        <button
-          className="btn btn-ghost btn-mini"
-          onClick={() => {
-            setShowTicketForm(false);
-            onGoHome();
-          }}
-        >
-          Inicio
-        </button>
-      </div>
-
-      {activeSection === 'remote' && (
-        <div className="detail-block">
-          <p className="lead">Solicitá asistencia remota sin salir de esta pantalla.</p>
-          <div className="detail-meta">
-            <div>
-              <span>Estado</span>
-              <strong>{remoteSession ? 'Conectado' : 'Disponible'}</strong>
-            </div>
-            <div>
-              <span>Código de sesión</span>
-              <strong>{remoteSession?.code ?? 'PENDIENTE'}</strong>
-            </div>
-          </div>
-          <p className="detail-copy">
-            {remoteSession?.instructions ?? 'Integración remota pendiente. Se mostrará el código cuando el técnico esté listo.'}
-          </p>
-          <div className="button-row">
-            <button className="btn btn-primary" onClick={onRequestRemoteSupport} disabled={isBusy}>
-              Pedir soporte
-            </button>
-            <button className="btn btn-ghost" onClick={onOpenRemote} disabled={isBusy}>
-              Abrir herramienta remota
-            </button>
-          </div>
-        </div>
-      )}
-
-      {activeSection === 'ticket' && (
-        <div className="detail-block">
-          <p className="lead">Formulario simple para que el técnico entienda el caso sin pérdida de tiempo.</p>
-          <div className="field-grid">
-            <label>
-              <span>Categoría</span>
-              <select value={ticketCategory} onChange={(event) => setTicketCategory(event.target.value)}>
-                <option value="Hardware">Hardware</option>
-                <option value="Software">Software</option>
-                <option value="Red">Red</option>
-                <option value="Rendimiento">Rendimiento</option>
-                <option value="Seguridad">Seguridad</option>
-              </select>
-            </label>
-            <label>
-              <span>Problema</span>
-              <input value={ticketIssue} onChange={(event) => setTicketIssue(event.target.value)} />
-            </label>
-            <label>
-              <span>Urgencia</span>
-              <select value={ticketUrgency} onChange={(event) => setTicketUrgency(event.target.value as Priority)}>
-                <option value="normal">Normal</option>
-                <option value="alta">Alta</option>
-              </select>
-            </label>
-            <label className="field-wide">
-              <span>Descripción</span>
-              <textarea
-                value={ticketDescription}
-                onChange={(event) => setTicketDescription(event.target.value)}
-                placeholder="Contá qué pasa, cuándo ocurre y qué ya probaste."
-              />
-            </label>
-          </div>
-          <div className="button-row">
-            <button className="btn btn-primary" onClick={onCreateTicket} disabled={isBusy}>
-              Enviar ticket
-            </button>
-            <button className="btn btn-ghost" onClick={() => setShowTicketForm(false)}>
-              Volver a inicio
-            </button>
-          </div>
-          <p className="detail-copy">Último ticket: {clientDashboard?.tickets[0]?.id ?? 'Sin tickets'}</p>
-        </div>
-      )}
-
-      {activeSection === 'quick' && (
-        <div className="detail-block">
-          <p className="lead">Revisión corta para detectar si hay algo fuera de rango.</p>
-          <div className="button-row">
-            <button className="btn btn-primary" onClick={onRunQuickDiagnostic} disabled={isBusy}>
-              Ejecutar diagnóstico rápido
-            </button>
-          </div>
-          <div className="chip-grid">
-            {quickChecks.map((item) => (
-              <StatusChip key={item.id} label={item.label} value={item.value} tone={item.tone} />
-            ))}
-          </div>
-          {quickDiagnostic && (
-            <p className="detail-copy">
-              Última revisión: {quickDiagnostic.generatedAt || 'Sin fecha'}.
-            </p>
-          )}
-        </div>
-      )}
-
-      {activeSection === 'advanced' && (
-        <div className="detail-block">
-          <p className="lead">Informe más completo para el técnico. Puede tardar unos minutos.</p>
-          <div className="progress-box">
-            <span>{advancedDiagnostic.running ? advancedDiagnostic.progress || 'Procesando...' : advancedDiagnostic.summary}</span>
-            <strong>{advancedDiagnostic.running ? 'En progreso' : 'Listo'}</strong>
-          </div>
-          <div className="button-row">
-            <button className="btn btn-primary" onClick={onRunAdvancedDiagnostic} disabled={isBusy || advancedDiagnostic.running}>
-              Ejecutar diagnóstico avanzado
-            </button>
-          </div>
-          {advancedDiagnostic.result && (
-            <div className="detail-copy">
-              {advancedDiagnostic.result.temperatureNote ?? 'Informe avanzado generado correctamente.'}
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeSection === 'cleaner' && (
-        <div className="detail-block">
-          <p className="lead">Opciones seguras. No limpia nada sin revisar primero.</p>
-          <div className="checklist">
-            <CheckOption
-              label="Archivos temporales"
-              checked={cleanerSelection.tempFiles}
-              onChange={(checked) => setCleanerSelection({ ...cleanerSelection, tempFiles: checked })}
-            />
-            <CheckOption
-              label="Caché de navegador"
-              checked={cleanerSelection.browserCache}
-              onChange={(checked) => setCleanerSelection({ ...cleanerSelection, browserCache: checked })}
-            />
-            <CheckOption
-              label="Papelera"
-              checked={cleanerSelection.recycleBin}
-              onChange={(checked) => setCleanerSelection({ ...cleanerSelection, recycleBin: checked })}
-            />
-            <CheckOption
-              label="Logs antiguos"
-              checked={cleanerSelection.oldLogs}
-              onChange={(checked) => setCleanerSelection({ ...cleanerSelection, oldLogs: checked })}
-            />
-            <CheckOption
-              label="Revisión de inicio de Windows"
-              checked={cleanerSelection.startupReview}
-              onChange={(checked) => setCleanerSelection({ ...cleanerSelection, startupReview: checked })}
-            />
-          </div>
-          <div className="button-row">
-            <button className="btn btn-ghost" onClick={onCleanerAnalyze} disabled={isBusy}>
-              Analizar primero
-            </button>
-            <button className="btn btn-primary" onClick={onCleanerRun} disabled={isBusy}>
-              Limpiar selección
-            </button>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function PrimaryActionCard({
-  active,
-  icon,
+function SimpleAdminPage({
   title,
+  eyebrow,
   description,
-  buttonLabel,
-  stateLabel,
-  onClick
+  rows
 }: {
-  active: boolean;
-  icon: ReactNode;
   title: string;
+  eyebrow: string;
   description: string;
-  buttonLabel: string;
-  stateLabel: string;
-  onClick: () => void;
+  rows: Array<{ primary: string; secondary: string; meta: string }>;
 }) {
   return (
-    <button className={`action-card ${active ? 'is-active' : ''}`} onClick={onClick}>
-      <div className="action-card__icon">{icon}</div>
-      <div className="action-card__body">
-        <strong>{title}</strong>
-        <p>{description}</p>
-        <span>{stateLabel}</span>
+    <section className="panel stack-panel">
+      <div className="stack-panel__head">
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h2>{title}</h2>
+        </div>
+        <span className="subtle">{description}</span>
       </div>
-      <div className="action-card__footer">
-        <span>{buttonLabel}</span>
+      <div className="row-list">
+        {rows.length === 0 ? (
+          <div className="empty-state">Sin registros para mostrar.</div>
+        ) : (
+          rows.map((row) => (
+            <div className="row-item" key={`${row.primary}-${row.meta}`}>
+              <div>
+                <strong>{row.primary}</strong>
+                <p>{row.secondary}</p>
+              </div>
+              <span className="pill">{row.meta}</span>
+            </div>
+          ))
+        )}
       </div>
-    </button>
+    </section>
   );
 }
 
-function StatusItem({ label, value, tone }: { label: string; value: string; tone: 'ok' | 'warn' | 'neutral' }) {
+function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="status-item">
-      <span>{label}</span>
-      <strong className={tone}>{value}</strong>
-    </div>
-  );
-}
-
-function Metric({ label, value, tone = 'neutral' }: { label: string; value: string; tone?: 'ok' | 'warn' | 'neutral' | 'danger' }) {
-  return (
-    <div className={`metric metric-${tone}`}>
+    <div className="info-card">
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
-  );
-}
-
-function StatusChip({ label, value, tone }: { label: string; value: string; tone: 'ok' | 'warn' | 'danger' | 'neutral' }) {
-  return (
-    <div className={`status-chip ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function CheckOption({
-  label,
-  checked,
-  onChange
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="check-option">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
-      <span>{label}</span>
-    </label>
   );
 }
 
 function ToastBar({ toast }: { toast: NonNullable<Toast> }) {
   return (
-    <div className={`toast ${toast.tone ?? 'neutral'}`}>
+    <div className={`toast toast--${toast.tone ?? 'neutral'}`}>
       <Bell size={15} />
       {toast.message}
     </div>
