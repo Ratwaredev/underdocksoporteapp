@@ -1,6 +1,7 @@
-import { Download, RefreshCw, Search, Shield, LogOut } from 'lucide-react';
+import { RefreshCw, Search, Shield, LogOut } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { CustomTitlebar } from './CustomTitlebar';
+import { UpdateNotice } from './UpdateNotice';
 import type { AppSession, UpdateResult } from '../lib/domain';
 
 type AdminPage = 'devices' | 'tickets' | 'sessions' | 'diagnostics' | 'settings';
@@ -73,6 +74,13 @@ export function AdminLayout({
         </aside>
 
         <section className="admin-main">
+          <UpdateNotice
+            updateResult={updateResult}
+            isUpdating={isUpdating}
+            updateProgress={updateProgress}
+            onInstallUpdate={onInstallUpdate}
+          />
+
           <header className="panel admin-header">
             <div className="header-search">
               <Search size={16} />
@@ -89,11 +97,6 @@ export function AdminLayout({
               <button className="btn btn-ghost" onClick={onRefresh} disabled={isBusy || isUpdating}>
                 <RefreshCw size={16} /> Actualizar
               </button>
-              {updateResult?.status === 'available' && (
-                <button className="btn btn-ghost" onClick={onInstallUpdate} disabled={isUpdating}>
-                  <Download size={16} /> {isUpdating ? updateProgress || 'Aplicando' : 'Actualizar y reiniciar'}
-                </button>
-              )}
               <button className="btn btn-ghost btn-quiet" onClick={onSignOut}>
                 <LogOut size={16} /> Salir
               </button>

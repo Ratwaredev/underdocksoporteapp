@@ -15,6 +15,7 @@ import type {
   UpdateResult
 } from '../lib/domain';
 import { CustomTitlebar } from './CustomTitlebar';
+import { UpdateNotice } from './UpdateNotice';
 import type { ReactNode } from 'react';
 
 type SectionId = 'remote' | 'ticket' | 'quick' | 'advanced' | 'cleaner';
@@ -150,13 +151,15 @@ export function ClientHome({
             <span>
               <ShieldCheck size={14} /> Ultima revision: {clientDashboard?.diagnostics[0]?.generatedAt ?? 'Sin revision'}
             </span>
-            {updateResult?.status === 'available' ? (
-              <button className="btn btn-primary" onClick={onInstallUpdate} disabled={isUpdating}>
-                <CheckCircle2 size={16} /> {isUpdating ? updateProgress || 'Aplicando' : 'Actualizar y reiniciar'}
-              </button>
-            ) : null}
           </div>
         </section>
+
+        <UpdateNotice
+          updateResult={updateResult}
+          isUpdating={isUpdating}
+          updateProgress={updateProgress}
+          onInstallUpdate={onInstallUpdate}
+        />
 
         <section className="panel client-actions">
           <div className="stack-panel__head">

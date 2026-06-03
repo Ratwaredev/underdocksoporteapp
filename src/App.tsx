@@ -846,7 +846,7 @@ function AdminApp() {
               <strong>Actualizacion disponible</strong>
               <p>{updateResult.notes}</p>
               <button className="btn btn-primary" onClick={handleInstallUpdate} disabled={isUpdating}>
-                <Download size={16} /> {isUpdating ? updateProgress || 'Aplicando' : 'Actualizar y reiniciar'}
+                <Download size={16} /> {isUpdating ? updateProgress || 'Aplicando' : 'Aplicar actualización'}
               </button>
             </div>
           )}

@@ -396,6 +396,24 @@ button {
   border-radius: 20px;
 }
 
+.update-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(216, 178, 76, 0.16);
+  background: linear-gradient(180deg, rgba(216, 178, 76, 0.08), rgba(255, 255, 255, 0.02));
+}
+
+.update-strip strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .client-summary,
 .client-actions,
 .client-detail,
