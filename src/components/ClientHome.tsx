@@ -176,9 +176,9 @@ export function ClientHome({
           <div className="stack-panel__head">
             <div>
               <p className="eyebrow">Acciones</p>
-              <h2>Centro de soporte</h2>
+              <h2>Soporte</h2>
             </div>
-            <span className="subtle">{showTicketForm ? 'Formulario abierto' : 'Vista principal'}</span>
+            <span className="subtle">{showTicketForm ? 'Ticket' : 'Principal'}</span>
           </div>
 
           <div className="action-grid">
@@ -186,7 +186,7 @@ export function ClientHome({
               active={activeSection === 'remote'}
               icon={<Wifi size={20} />}
               title="Soporte remoto"
-              description="Pedir asistencia sin salir de la app."
+              description="Abrir ayuda."
               onClick={() => {
                 onSelectSection('remote');
                 onRequestRemoteSupport();
@@ -196,7 +196,7 @@ export function ClientHome({
               active={activeSection === 'ticket'}
               icon={<TerminalSquare size={20} />}
               title="Crear ticket"
-              description="Abrir un caso corto y preciso."
+              description="Nuevo caso."
               onClick={() => {
                 onSelectSection('ticket');
                 onCreateTicket();
@@ -206,7 +206,7 @@ export function ClientHome({
               active={activeSection === 'quick'}
               icon={<CheckCircle2 size={20} />}
               title="Diagnostico rapido"
-              description="Chequeo breve del estado general."
+              description="Chequeo corto."
               onClick={() => {
                 onSelectSection('quick');
                 onRunQuickDiagnostic();
@@ -216,7 +216,7 @@ export function ClientHome({
               active={activeSection === 'advanced'}
               icon={<Globe2 size={20} />}
               title="Diagnostico avanzado"
-              description="Informe mas completo para el tecnico."
+              description="Informe largo."
               onClick={() => {
                 onSelectSection('advanced');
                 onRunAdvancedDiagnostic();
@@ -226,7 +226,7 @@ export function ClientHome({
               active={activeSection === 'cleaner'}
               icon={<Trash2 size={20} />}
               title="Cleaner"
-              description="Temporales, cache y revision de inicio."
+              description="Limpieza."
               onClick={() => {
                 onSelectSection('cleaner');
                 onCleanerAnalyze();
@@ -238,10 +238,10 @@ export function ClientHome({
         <section className="panel client-detail" ref={detailRef}>
           <div className="detail-head">
             <div>
-              <p className="eyebrow">Seccion activa</p>
+              <p className="eyebrow">Activa</p>
               <h2>{detailTitle(activeSection)}</h2>
             </div>
-            <span className="subtle">Click en una tarjeta para saltar aqui</span>
+            <span className="subtle">Toca una tarjeta.</span>
           </div>
 
           {activeSection === 'remote' && (

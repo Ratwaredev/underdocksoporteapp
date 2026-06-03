@@ -60,6 +60,7 @@ type BackendBase = {
   createTicket(input: CreateTicketInput, deviceToken: string): Promise<TicketRecord>;
   saveDiagnostic(input: SaveDiagnosticInput, deviceToken: string): Promise<DiagnosticRecord>;
   createRemoteSession(input: CreateSessionInput, deviceToken: string): Promise<SessionRecord>;
+  deleteDevice(deviceId: string): Promise<void>;
   updateTicketStatus(ticketId: string, status: TicketStatus): Promise<TicketRecord>;
   listReleases(): Promise<ReleaseRecord[]>;
   checkForUpdates(currentVersion: string): Promise<UpdateResult>;
@@ -89,17 +90,19 @@ function readSession(): StoredSession {
   return null;
 }
 
-function readAdminSession(): StoredSession {
+function readStoredSession(key: string): StoredSession {
   if (typeof window === 'undefined') return null;
-
-  const raw = window.localStorage.getItem(STORAGE_KEYS.adminSession);
+  const raw = window.localStorage.getItem(key);
   if (!raw) return null;
-
   try {
     return JSON.parse(raw) as StoredSession;
   } catch {
     return null;
   }
+}
+
+function readAdminSession(): StoredSession {
+  return readStoredSession(STORAGE_KEYS.adminSession);
 }
 
 function writeSession(session: StoredSession) {
@@ -120,6 +123,15 @@ function writeAdminSession(session: StoredSession) {
   }
 
   window.localStorage.setItem(STORAGE_KEYS.adminSession, JSON.stringify(session));
+}
+
+function clearClientSessionIfMatching(deviceId: string) {
+  if (typeof window === 'undefined') return;
+
+  const session = readSession();
+  if (session?.deviceId === deviceId) {
+    writeSession(null);
+  }
 }
 
 function readLocalState(): LocalState {
@@ -498,6 +510,20 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
       setState(state);
       return clone(session);
     },
+    async deleteDevice(deviceId) {
+      requireAdminSession();
+      const state = getState();
+      const device = state.devices.find((item) => item.id === deviceId);
+      if (!device) throw new Error('No se encontro el equipo.');
+
+      state.devices = state.devices.filter((item) => item.id !== deviceId);
+      state.tickets = state.tickets.filter((item) => item.deviceId !== deviceId);
+      state.diagnostics = state.diagnostics.filter((item) => item.deviceId !== deviceId);
+      state.sessions = state.sessions.filter((item) => item.deviceId !== deviceId);
+      state.pairingCodes = state.pairingCodes.filter((item) => item.claimedDeviceId !== deviceId);
+      setState(state);
+      clearClientSessionIfMatching(deviceId);
+    },
     async updateTicketStatus(ticketId, status) {
       requireAdminSession();
       const state = getState();
@@ -590,6 +616,9 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
           throw new Error('Supabase no esta configurado.');
         },
         async createRemoteSession() {
+          throw new Error('Supabase no esta configurado.');
+        },
+        async deleteDevice() {
           throw new Error('Supabase no esta configurado.');
         },
         async updateTicketStatus() {
@@ -813,6 +842,20 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
         p_ticket_id: input.ticketId
       });
       return Array.isArray(result) ? result[0] : result;
+    },
+    async deleteDevice(deviceId) {
+      const session = readAdminSession();
+      if (!session?.accessToken) throw new Error('No hay sesion admin activa.');
+
+      await request(
+        `/rest/v1/devices?id=eq.${deviceId}`,
+        {
+          method: 'DELETE'
+        },
+        session.accessToken
+      );
+
+      clearClientSessionIfMatching(deviceId);
     },
     async updateTicketStatus(ticketId, status) {
       const session = readAdminSession();

@@ -832,6 +832,19 @@ button {
   gap: 12px;
 }
 
+.panel-inline {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0 0;
+}
+
+.panel-inline__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .row-item,
 .device-row {
   display: grid;

@@ -47,7 +47,7 @@ export function AdminLayout({
       <div className="admin-shell">
         <aside className="panel admin-sidebar">
           <div className="sidebar-head">
-            <p className="eyebrow">Navegacion</p>
+            <p className="eyebrow">Menu</p>
             <strong>Admin</strong>
           </div>
           <nav className="sidebar-nav">
@@ -85,12 +85,12 @@ export function AdminLayout({
 
           <header className="panel admin-header">
             <div className="admin-header__intro">
-              <p className="eyebrow">Panel admin</p>
-              <strong>Simple, directo y listo para prueba</strong>
+              <p className="eyebrow">Panel</p>
+              <strong>Directo y simple</strong>
             </div>
             <div className="header-search">
               <Search size={16} />
-              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Buscar equipos, tickets o diagnósticos" />
+              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Buscar" />
             </div>
             <div className="header-status">
               <span className="header-chip">
@@ -102,13 +102,13 @@ export function AdminLayout({
             </div>
             <div className="header-actions">
               <button className="btn btn-primary" onClick={onOpenClientPreview} disabled={isBusy || isUpdating}>
-                Usar app
+                App
               </button>
               <button className="btn btn-ghost" onClick={onRefresh} disabled={isBusy || isUpdating}>
-                <RefreshCw size={16} /> Actualizar
+                <RefreshCw size={16} /> Refrescar
               </button>
               <button className="btn btn-ghost btn-quiet" onClick={onSignOut}>
-                <LogOut size={16} /> Salir
+                <LogOut size={16} /> Cerrar
               </button>
             </div>
           </header>

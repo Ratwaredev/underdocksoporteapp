@@ -26,6 +26,7 @@ import { ClientActivation } from './components/ClientActivation';
 import { ClientHome } from './components/ClientHome';
 import { PasswordRecovery } from './components/PasswordRecovery';
 import { UpdateNotice } from './components/UpdateNotice';
+import { appendAppError, clearAppErrors, listAppErrors } from './lib/errorLogs';
 
 type Toast = { message: string; tone?: 'neutral' | 'ok' | 'warn' | 'danger' } | null;
 type SectionId = 'remote' | 'ticket' | 'quick' | 'advanced' | 'cleaner';
@@ -143,12 +144,12 @@ function getAppRoute(): AppRoute {
     }
   };
 
-  const savedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
-  if (savedView === 'admin' && hasStoredSession(STORAGE_KEYS.adminSession, 'admin')) return { kind: 'admin' };
-  if (savedView === 'client' && hasStoredSession(STORAGE_KEYS.clientSession, 'client')) return { kind: 'client' };
-
   if (hasStoredSession(STORAGE_KEYS.adminSession, 'admin')) return { kind: 'admin' };
   if (hasStoredSession(STORAGE_KEYS.clientSession, 'client')) return { kind: 'client' };
+
+  const savedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
+  if (savedView === 'admin') return { kind: 'admin' };
+  if (savedView === 'client') return { kind: 'client' };
 
   const view = new URLSearchParams(window.location.search).get('view');
   return view === 'admin' ? { kind: 'admin' } : { kind: 'client' };
@@ -198,6 +199,26 @@ function App() {
     })();
     return () => {
       alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      appendAppError('window.error', event.message || 'Error inesperado', event.error instanceof Error ? event.error.stack : undefined);
+      window.dispatchEvent(new Event('underdock:error-log'));
+    };
+
+    const onRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason instanceof Error ? event.reason : new Error(String(event.reason ?? 'Rechazo de promesa no controlado'));
+      appendAppError('unhandledrejection', reason.message, reason.stack);
+      window.dispatchEvent(new Event('underdock:error-log'));
+    };
+
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
     };
   }, []);
 
@@ -297,7 +318,6 @@ function ClientApp({ onGoAdmin, canReturnToAdmin }: { onGoAdmin: () => void; can
   });
   const activeSectionRef = useRef<HTMLElement | null>(null);
   const lastSectionRef = useRef<SectionId>(activeSection);
-
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -404,6 +424,9 @@ function ClientApp({ onGoAdmin, canReturnToAdmin }: { onGoAdmin: () => void; can
 
   function notify(message: string, tone: NonNullable<Toast>['tone'] = 'neutral') {
     setToast({ message, tone });
+    if (tone === 'danger') {
+      appendAppError('client', message);
+    }
   }
 
   function handleSignOut() {
@@ -687,9 +710,9 @@ function ClientApp({ onGoAdmin, canReturnToAdmin }: { onGoAdmin: () => void; can
       cpuTone: report?.cpu ? 'ok' : 'neutral',
       temp: cpuTemp == null ? 'Pendiente' : `${cpuTemp.toFixed(1)} °C`,
       tempTone: cpuTemp == null ? 'neutral' : cpuTemp >= 85 ? 'danger' : cpuTemp >= 70 ? 'warn' : 'ok',
-      ram: report && ramUsed != null ? `${ramUsed.toFixed(1)} GB usados · ${ramUsage ?? 0}%` : 'Sin dato',
+      ram: report && ramUsed != null ? `${ramUsed.toFixed(1)} GB usados - ${ramUsage ?? 0}%` : 'Sin dato',
       ramTone: ramUsage == null ? 'neutral' : ramUsage >= 90 ? 'danger' : ramUsage >= 75 ? 'warn' : 'ok',
-      disk: report ? `${report.systemDriveFreeGb.toFixed(0)} GB libres · ${diskUsage ?? 0}% usado` : 'Sin dato',
+      disk: report ? `${report.systemDriveFreeGb.toFixed(0)} GB libres - ${diskUsage ?? 0}% usado` : 'Sin dato',
       diskTone: diskUsage == null ? 'neutral' : diskUsage >= 90 ? 'danger' : diskUsage >= 80 ? 'warn' : 'ok',
       security: report?.defenderStatus ?? 'Pendiente',
       securityTone: report?.defenderStatus?.toLowerCase().includes('desactiv') ? 'danger' : report?.defenderStatus ? 'ok' : 'neutral',
@@ -790,6 +813,15 @@ function AdminApp({
   const [selectedPage, setSelectedPage] = useState<AdminPage>('devices');
   const [searchQuery, setSearchQuery] = useState('');
   const [authError, setAuthError] = useState('');
+  const [errorLogTick, setErrorLogTick] = useState(0);
+
+  useEffect(() => {
+    const onChange = () => setErrorLogTick((current) => current + 1);
+    window.addEventListener('underdock:error-log', onChange as EventListener);
+    return () => window.removeEventListener('underdock:error-log', onChange as EventListener);
+  }, []);
+
+  const errorLogs = useMemo(() => listAppErrors(), [errorLogTick]);
 
   async function handleOpenClientPreview() {
     setIsBusy(true);
@@ -850,6 +882,11 @@ function AdminApp({
 
   function notify(message: string, tone: NonNullable<Toast>['tone'] = 'neutral') {
     setToast({ message, tone });
+    if (tone === 'danger') {
+      appendAppError('admin', message);
+      window.dispatchEvent(new Event('underdock:error-log'));
+      setErrorLogTick((current) => current + 1);
+    }
   }
 
   async function handleSignIn(event: FormEvent<HTMLFormElement>) {
@@ -895,6 +932,28 @@ function AdminApp({
       notify(`Codigo generado: ${code.code}`, 'ok');
     } catch (error) {
       notify(error instanceof Error ? error.message : 'No se pudo generar el codigo.', 'danger');
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleDeleteDevice(deviceId: string) {
+    const device = dashboard?.devices.find((item) => item.id === deviceId);
+    if (!device) {
+      notify('Equipo no encontrado.', 'danger');
+      return;
+    }
+
+    const confirmed = window.confirm(`Borrar ${device.displayName}? Se eliminan sus tickets, diagnósticos y sesiones.`);
+    if (!confirmed) return;
+
+    setIsBusy(true);
+    try {
+      await appBackend.deleteDevice(deviceId);
+      await loadDashboard();
+      notify(`Equipo ${device.displayName} borrado.`, 'ok');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'No se pudo borrar el equipo.', 'danger');
     } finally {
       setIsBusy(false);
     }
@@ -965,11 +1024,11 @@ function AdminApp({
   }
 
   return (
-      <AdminLayout
-        session={session}
-        selectedPage={selectedPage}
-        setSelectedPage={setSelectedPage}
-        searchQuery={searchQuery}
+    <AdminLayout
+      session={session}
+      selectedPage={selectedPage}
+      setSelectedPage={setSelectedPage}
+      searchQuery={searchQuery}
       setSearchQuery={setSearchQuery}
       isBusy={isBusy}
       updateResult={updateResult}
@@ -979,8 +1038,8 @@ function AdminApp({
       onRefresh={handleRefreshAdmin}
       onSignOut={handleSignOutAdmin}
       onInstallUpdate={handleInstallUpdate}
-        onOpenClientPreview={handleOpenClientPreview}
-      >
+      onOpenClientPreview={handleOpenClientPreview}
+    >
       {selectedPage === 'devices' && (
         <AdminDevicesPage
           dashboard={dashboard}
@@ -1002,6 +1061,7 @@ function AdminApp({
             setSelectedPage('diagnostics');
             if (deviceId) setSearchQuery(deviceId);
           }}
+          onDeleteDevice={handleDeleteDevice}
         />
       )}
 
@@ -1009,10 +1069,10 @@ function AdminApp({
         <SimpleAdminPage
           title="Tickets"
           eyebrow="Mesa de ayuda"
-          description="Lista directa para revisar estados y priorizar casos."
+          description="Estado y prioridad."
           rows={filteredTickets.map((ticket) => ({
             primary: ticket.id,
-            secondary: `${ticket.clientName} · ${ticket.priority}`,
+            secondary: `${ticket.clientName} - ${ticket.priority}`,
             meta: ticket.status
           }))}
         />
@@ -1022,10 +1082,10 @@ function AdminApp({
         <SimpleAdminPage
           title="Sesiones remotas"
           eyebrow="Soporte remoto"
-          description="Sesiones activas y referencias del ticket asociado."
+          description="Sesiones activas."
           rows={(dashboard?.sessions ?? []).map((sessionRow) => ({
             primary: sessionRow.code,
-            secondary: `${sessionRow.ticketId} · ${sessionRow.createdAt}`,
+            secondary: `${sessionRow.ticketId} - ${sessionRow.createdAt}`,
             meta: `${sessionRow.expiresInMinutes} min`
           }))}
         />
@@ -1039,7 +1099,7 @@ function AdminApp({
         <div className="panel stack-panel">
           <div className="stack-panel__head">
             <div>
-              <p className="eyebrow">Configuracion</p>
+              <p className="eyebrow">Ajustes</p>
               <h2>Panel admin</h2>
             </div>
           </div>
@@ -1049,12 +1109,45 @@ function AdminApp({
             <InfoCard label="Version" value={`v${APP_VERSION}`} />
             <InfoCard label="Equipos" value={`${counts.devices}`} />
           </div>
+          <div className="panel-inline">
+            <div className="panel-inline__head">
+              <div>
+                <p className="eyebrow">Errores</p>
+                <strong>Registro</strong>
+              </div>
+              <button
+                className="btn btn-ghost btn-mini"
+                onClick={() => {
+                  clearAppErrors();
+                  setErrorLogTick((current) => current + 1);
+                }}
+              >
+                Limpiar
+              </button>
+            </div>
+            {errorLogs.length === 0 ? (
+              <div className="empty-state">Sin errores registrados.</div>
+            ) : (
+              <div className="row-list row-list--compact">
+                {errorLogs.slice(0, 6).map((entry) => (
+                  <div className="row-item row-item--stacked" key={entry.id}>
+                    <div>
+                      <strong>{entry.source}</strong>
+                      <p>{entry.message}</p>
+                      <p className="row-item__detail">{entry.createdAt}</p>
+                    </div>
+                    {entry.details ? <span className="subtle">{entry.details.slice(0, 120)}</span> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           {updateResult?.status === 'available' && (
             <div className="subtle-card">
               <strong>Actualizacion disponible</strong>
               <p>{updateResult.notes}</p>
               <button className="btn btn-primary" onClick={handleInstallUpdate} disabled={isUpdating}>
-                <Download size={16} /> {isUpdating ? updateProgress || 'Aplicando' : 'Aplicar actualización'}
+                <Download size={16} /> {isUpdating ? updateProgress || 'Aplicando' : 'Actualizar'}
               </button>
             </div>
           )}
@@ -1118,10 +1211,10 @@ function SimpleAdminPage({
   return (
     <section className="panel stack-panel">
       <div className="stack-panel__head">
-        <div>
-          <p className="eyebrow">{eyebrow}</p>
-          <h2>{title}</h2>
-        </div>
+          <div>
+            <p className="eyebrow">{eyebrow}</p>
+            <h2>{title}</h2>
+          </div>
         <span className="subtle">{description}</span>
       </div>
       <div className="row-list">
@@ -1151,39 +1244,25 @@ function DiagnosticsAdminPage({
   searchQuery: string;
 }) {
   const query = searchQuery.trim().toLowerCase();
-  const devices = [...(dashboard?.devices ?? [])].sort((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt));
-  const diagnosticsByDevice = new Map<string, DiagnosticRecord>();
-
-  for (const diagnostic of dashboard?.diagnostics ?? []) {
-    if (!diagnosticsByDevice.has(diagnostic.deviceId)) {
-      diagnosticsByDevice.set(diagnostic.deviceId, diagnostic);
-    }
-  }
-
-  const rows = devices
-    .filter((device) => {
+  const deviceNames = new Map((dashboard?.devices ?? []).map((device) => [device.id, device.displayName]));
+  const rows = [...(dashboard?.diagnostics ?? [])]
+    .sort((left, right) => right.generatedAt.localeCompare(left.generatedAt))
+    .filter((diagnostic) => {
       if (!query) return true;
-      const diagnostic = diagnosticsByDevice.get(device.id);
       return [
-        device.id,
-        device.displayName,
-        device.computerName,
-        device.userName,
-        device.os,
-        diagnostic?.id ?? '',
-        formatDiagnosticSummary(diagnostic?.payload ?? null)
+        diagnostic.id,
+        diagnostic.deviceId,
+        deviceNames.get(diagnostic.deviceId) ?? '',
+        diagnostic.generatedAt,
+        formatDiagnosticSummary(diagnostic.payload)
       ].some((value) => value.toLowerCase().includes(query));
     })
-    .map((device) => {
-      const diagnostic = diagnosticsByDevice.get(device.id);
-
-      return {
-        primary: device.displayName,
-        secondary: [device.id, device.computerName, device.lastSeenAt].join(' · '),
-        meta: diagnostic ? diagnostic.id : 'Sin diagnostico',
-        detail: diagnostic ? formatDiagnosticSummary(diagnostic.payload) : 'Sin diagnostico guardado todavia.'
-      };
-    });
+    .map((diagnostic) => ({
+      primary: deviceNames.get(diagnostic.deviceId) ?? diagnostic.deviceId,
+      secondary: `${diagnostic.generatedAt} - ${diagnostic.deviceId}`,
+      meta: diagnostic.id,
+      detail: formatDiagnosticSummary(diagnostic.payload)
+    }));
 
   return (
     <section className="panel stack-panel">
@@ -1192,11 +1271,11 @@ function DiagnosticsAdminPage({
           <p className="eyebrow">Salud</p>
           <h2>Diagnosticos</h2>
         </div>
-        <span className="subtle">Informe compacto de los equipos con actividad reciente.</span>
+        <span className="subtle">Ultimos registros.</span>
       </div>
       <div className="row-list row-list--diagnostics">
         {rows.length === 0 ? (
-          <div className="empty-state">Sin equipos que coincidan con la busqueda.</div>
+          <div className="empty-state">Sin diagnosticos para mostrar.</div>
         ) : (
           rows.map((row) => (
             <article className="row-item row-item--stacked" key={`${row.primary}-${row.meta}`}>
@@ -1230,7 +1309,7 @@ function formatDiagnosticSummary(payload: Record<string, unknown> | null) {
     if (value) parts.push(value);
   }
 
-  return parts.length > 0 ? parts.join(' · ') : 'Diagnostico disponible sin resumen legible.';
+  return parts.length > 0 ? parts.join(' - ') : 'Diagnostico disponible.';
 }
 
 function InfoCard({ label, value }: { label: string; value: string }) {

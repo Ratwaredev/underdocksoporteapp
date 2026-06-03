@@ -10,7 +10,8 @@ export function AdminDevicesPage({
   onGeneratePairingCode,
   onCopyCode,
   onOpenRemoteTool,
-  onShowDiagnostics
+  onShowDiagnostics,
+  onDeleteDevice
 }: {
   dashboard: AdminDashboard | null;
   filteredDevices: DeviceRecord[];
@@ -20,6 +21,7 @@ export function AdminDevicesPage({
   onCopyCode: () => void;
   onOpenRemoteTool: () => void;
   onShowDiagnostics: (deviceId?: string) => void;
+  onDeleteDevice: (deviceId: string) => void;
 }) {
   return (
     <div className="admin-workspace">
@@ -42,7 +44,7 @@ export function AdminDevicesPage({
                     <strong>{device.displayName}</strong>
                     <span className="pill">{device.status}</span>
                   </div>
-                  <p>{device.computerName} · {device.os}</p>
+                  <p>{device.computerName} - {device.os}</p>
                 </div>
                 <div className="device-row__meta">
                   <span><Monitor size={14} /> {device.orgName}</span>
@@ -57,6 +59,9 @@ export function AdminDevicesPage({
                   </button>
                   <button className="btn btn-ghost btn-mini" onClick={() => onShowDiagnostics(device.id)}>
                     Ver diagnostico
+                  </button>
+                  <button className="btn btn-ghost btn-mini" onClick={() => onDeleteDevice(device.id)}>
+                    Borrar
                   </button>
                 </div>
               </article>
