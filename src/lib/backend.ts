@@ -272,8 +272,8 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
 
       return null;
     },
-    async signInAdmin(email, password, orgName) {
-      if (email !== config.localAdminEmail || password !== config.localAdminPassword || orgName !== config.localAdminOrg) {
+    async signInAdmin(email, password) {
+      if (email !== config.localAdminEmail || password !== config.localAdminPassword) {
         throw new Error('Credenciales invalidas para el panel admin local.');
       }
 
@@ -657,12 +657,6 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
       if (!profile) {
         throw new Error('El usuario autenticado no figura como admin en la base.');
       }
-      const submittedOrg = orgName.trim().toLowerCase();
-      const profileOrg = profile.orgName.trim().toLowerCase();
-      if (submittedOrg && profileOrg && submittedOrg !== profileOrg) {
-        throw new Error('El equipo indicado no coincide con tu perfil admin.');
-      }
-
       const session: AppSession = {
         role: 'admin',
         backendKind: 'supabase',

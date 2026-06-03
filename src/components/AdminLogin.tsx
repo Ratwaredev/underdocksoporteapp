@@ -9,7 +9,8 @@ export function AdminLogin({
   setPassword,
   onSubmit,
   isBusy,
-  authError
+  authError,
+  version
 }: {
   email: string;
   setEmail: (value: string) => void;
@@ -18,6 +19,7 @@ export function AdminLogin({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   isBusy: boolean;
   authError?: string;
+  version: string;
 }) {
   return (
     <main className="page-shell">
@@ -64,7 +66,7 @@ export function AdminLogin({
         </form>
       </section>
 
-      <footer className="version-footer">UnderDock</footer>
+      <footer className="version-footer">UnderDock {version}</footer>
     </main>
   );
 }

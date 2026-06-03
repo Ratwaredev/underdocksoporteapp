@@ -807,7 +807,9 @@ function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmi
     setIsBusy(true);
     setAuthError('');
     try {
-      const result = await appBackend.signInAdmin(email.trim(), password, '');
+      const safeEmail = (email ?? '').trim();
+      const safePassword = password ?? '';
+      const result = await appBackend.signInAdmin(safeEmail, safePassword, '');
       setSession(result.session);
       setPassword('');
       notify('Acceso admin concedido.', 'ok');
@@ -912,6 +914,7 @@ function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmi
         onSubmit={handleSignIn}
         isBusy={isBusy}
         authError={authError}
+        version={`v${APP_VERSION}`}
       />
     );
   }
