@@ -143,11 +143,12 @@ function getAppRoute(): AppRoute {
     }
   };
 
+  const savedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
+  if (savedView === 'admin' && hasStoredSession(STORAGE_KEYS.adminSession, 'admin')) return { kind: 'admin' };
+  if (savedView === 'client' && hasStoredSession(STORAGE_KEYS.clientSession, 'client')) return { kind: 'client' };
+
   if (hasStoredSession(STORAGE_KEYS.adminSession, 'admin')) return { kind: 'admin' };
   if (hasStoredSession(STORAGE_KEYS.clientSession, 'client')) return { kind: 'client' };
-
-  const savedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
-  if (savedView === 'admin') return { kind: 'admin' };
 
   const view = new URLSearchParams(window.location.search).get('view');
   return view === 'admin' ? { kind: 'admin' } : { kind: 'client' };
@@ -165,6 +166,10 @@ function App() {
   const openClient = () => {
     if (typeof window !== 'undefined') window.localStorage.setItem(VIEW_STORAGE_KEY, 'client');
     setRoute((current) => (current.kind === 'recovery' ? current : { kind: 'client' }));
+  };
+  const openClientPreview = async () => {
+    await appBackend.createPreviewClientSession();
+    openClient();
   };
 
   useEffect(() => {
@@ -226,7 +231,7 @@ function App() {
 
   return (
     <ShellFrame updateResult={updateResult} isUpdating={isUpdating} updateProgress={updateProgress} onInstallUpdate={handleInstallUpdate}>
-      {route.kind === 'admin' ? <AdminApp initialEmail={route.email} onGoAdmin={openAdmin} /> : <ClientApp onGoAdmin={openAdmin} />}
+      {route.kind === 'admin' ? <AdminApp initialEmail={route.email} onGoAdmin={openAdmin} onOpenClientPreview={openClientPreview} /> : <ClientApp onGoAdmin={openAdmin} canReturnToAdmin={Boolean(window.localStorage.getItem(STORAGE_KEYS.adminSession))} />}
     </ShellFrame>
   );
 }
@@ -252,7 +257,7 @@ function ShellFrame({
   );
 }
 
-function ClientApp({ onGoAdmin }: { onGoAdmin: () => void }) {
+function ClientApp({ onGoAdmin, canReturnToAdmin }: { onGoAdmin: () => void; canReturnToAdmin: boolean }) {
   const [booting, setBooting] = useState(true);
   const [session, setSession] = useState<AppSession | null>(null);
   const [toast, setToast] = useState<Toast>(null);
@@ -720,9 +725,9 @@ function ClientApp({ onGoAdmin }: { onGoAdmin: () => void }) {
   }
 
   return (
-    <ClientHome
-      session={session}
-      clientDashboard={clientDashboard}
+      <ClientHome
+        session={session}
+        clientDashboard={clientDashboard}
       remoteSession={remoteSession}
       updateResult={updateResult}
       isUpdating={isUpdating}
@@ -753,15 +758,25 @@ function ClientApp({ onGoAdmin }: { onGoAdmin: () => void }) {
       onCleanerRun={handleCleanerRun}
       onOpenRemote={handleOpenRemote}
       onRefresh={handleRefresh}
-      onSignOut={handleSignOut}
-      onInstallUpdate={handleNativeUpdateInstall}
-      agentResult={agentResult}
-      detailRef={activeSectionRef}
-    />
-  );
+        onSignOut={handleSignOut}
+        onInstallUpdate={handleNativeUpdateInstall}
+        agentResult={agentResult}
+        detailRef={activeSectionRef}
+        canReturnToAdmin={canReturnToAdmin}
+        onReturnToAdmin={onGoAdmin}
+      />
+    );
 }
 
-function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmin: () => void }) {
+function AdminApp({
+  initialEmail,
+  onGoAdmin,
+  onOpenClientPreview
+}: {
+  initialEmail?: string;
+  onGoAdmin: () => void;
+  onOpenClientPreview: () => Promise<void>;
+}) {
   const [session, setSession] = useState<AppSession | null>(null);
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [toast, setToast] = useState<Toast>(null);
@@ -775,6 +790,18 @@ function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmi
   const [selectedPage, setSelectedPage] = useState<AdminPage>('devices');
   const [searchQuery, setSearchQuery] = useState('');
   const [authError, setAuthError] = useState('');
+
+  async function handleOpenClientPreview() {
+    setIsBusy(true);
+    try {
+      await onOpenClientPreview();
+      notify('Modo cliente activado para prueba.', 'ok');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'No se pudo abrir la app de prueba.', 'danger');
+    } finally {
+      setIsBusy(false);
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -938,11 +965,11 @@ function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmi
   }
 
   return (
-    <AdminLayout
-      session={session}
-      selectedPage={selectedPage}
-      setSelectedPage={setSelectedPage}
-      searchQuery={searchQuery}
+      <AdminLayout
+        session={session}
+        selectedPage={selectedPage}
+        setSelectedPage={setSelectedPage}
+        searchQuery={searchQuery}
       setSearchQuery={setSearchQuery}
       isBusy={isBusy}
       updateResult={updateResult}
@@ -952,7 +979,8 @@ function AdminApp({ initialEmail, onGoAdmin }: { initialEmail?: string; onGoAdmi
       onRefresh={handleRefreshAdmin}
       onSignOut={handleSignOutAdmin}
       onInstallUpdate={handleInstallUpdate}
-    >
+        onOpenClientPreview={handleOpenClientPreview}
+      >
       {selectedPage === 'devices' && (
         <AdminDevicesPage
           dashboard={dashboard}

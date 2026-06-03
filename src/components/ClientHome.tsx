@@ -63,7 +63,9 @@ export function ClientHome({
   onSignOut,
   onInstallUpdate,
   agentResult,
-  detailRef
+  detailRef,
+  canReturnToAdmin,
+  onReturnToAdmin
 }: {
   session: AppSession;
   clientDashboard: ClientDashboard | null;
@@ -113,6 +115,8 @@ export function ClientHome({
   onInstallUpdate: () => void;
   agentResult: unknown;
   detailRef: RefObject<HTMLElement | null>;
+  canReturnToAdmin: boolean;
+  onReturnToAdmin: () => void;
 }) {
   return (
     <main className="page-shell">
@@ -123,6 +127,11 @@ export function ClientHome({
         status={session.orgName ?? 'Cliente activo'}
         rightSlot={
           <div className="titlebar__actions">
+            {canReturnToAdmin && (
+              <button className="btn btn-ghost btn-mini" onClick={onReturnToAdmin}>
+                Volver al panel
+              </button>
+            )}
             <button className="btn btn-ghost btn-mini" onClick={onRefresh}>
               <RefreshCw size={14} /> Actualizar
             </button>

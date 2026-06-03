@@ -54,6 +54,7 @@ type BackendBase = {
   signOutAdmin(): Promise<void>;
   generatePairingCode(): Promise<PairingCodeRecord>;
   registerClient(input: RegisterClientInput): Promise<ClientBootstrap>;
+  createPreviewClientSession(): Promise<ClientBootstrap>;
   getAdminDashboard(): Promise<AdminDashboard>;
   getClientDashboard(deviceToken: string): Promise<ClientDashboard>;
   createTicket(input: CreateTicketInput, deviceToken: string): Promise<TicketRecord>;
@@ -356,6 +357,49 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
       writeSession(session);
       return { session, device };
     },
+    async createPreviewClientSession() {
+      requireAdminSession();
+      const state = getState();
+      const existingDevice = state.devices.find((item) => item.displayName === 'Equipo de prueba' && item.orgName === state.profile.orgName);
+      const timestamp = nowIso();
+
+      const device: DeviceRecord =
+        existingDevice ??
+        {
+          id: createId('dev_'),
+          orgName: state.profile.orgName,
+          displayName: 'Equipo de prueba',
+          computerName: 'ADMIN-PREVIEW',
+          userName: 'admin',
+          os: 'Windows 11 Pro 24H2',
+          platform: 'windows',
+          deviceToken: createId('tok_'),
+          status: 'idle',
+          lastSeenAt: timestamp,
+          createdAt: timestamp,
+          updatedAt: timestamp
+        };
+
+      if (!existingDevice) {
+        state.devices = [device, ...state.devices];
+      } else {
+        existingDevice.lastSeenAt = timestamp;
+        existingDevice.updatedAt = timestamp;
+      }
+      setState(state);
+
+      const session: AppSession = {
+        role: 'client',
+        backendKind: 'local',
+        deviceId: device.id,
+        deviceToken: device.deviceToken,
+        displayName: device.displayName,
+        orgName: device.orgName
+      };
+
+      writeSession(session);
+      return { session, device };
+    },
     async getAdminDashboard() {
       requireAdminSession();
       const state = getState();
@@ -528,6 +572,9 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
           throw new Error('Supabase no esta configurado.');
         },
         async registerClient() {
+          throw new Error('Supabase no esta configurado.');
+        },
+        async createPreviewClientSession() {
           throw new Error('Supabase no esta configurado.');
         },
         async getAdminDashboard() {
@@ -716,6 +763,9 @@ function createSupabaseBackend(config: RuntimeConfig): BackendBase {
 
       writeSession(session);
       return { session, device };
+    },
+    async createPreviewClientSession() {
+      throw new Error('La vista cliente de prueba solo esta disponible en modo local.');
     },
     async getAdminDashboard() {
       const session = readAdminSession();

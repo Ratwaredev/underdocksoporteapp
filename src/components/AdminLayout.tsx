@@ -20,6 +20,7 @@ export function AdminLayout({
   onRefresh,
   onSignOut,
   onInstallUpdate,
+  onOpenClientPreview,
   children
 }: {
   session: AppSession;
@@ -35,6 +36,7 @@ export function AdminLayout({
   onRefresh: () => void;
   onSignOut: () => void;
   onInstallUpdate: () => void;
+  onOpenClientPreview: () => void;
   children: ReactNode;
 }) {
   return (
@@ -82,6 +84,10 @@ export function AdminLayout({
           />
 
           <header className="panel admin-header">
+            <div className="admin-header__intro">
+              <p className="eyebrow">Panel admin</p>
+              <strong>Simple, directo y listo para prueba</strong>
+            </div>
             <div className="header-search">
               <Search size={16} />
               <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Buscar equipos, tickets o diagnósticos" />
@@ -95,6 +101,9 @@ export function AdminLayout({
               <span className="header-chip">Sesiones {counts.sessions}</span>
             </div>
             <div className="header-actions">
+              <button className="btn btn-primary" onClick={onOpenClientPreview} disabled={isBusy || isUpdating}>
+                Usar app
+              </button>
               <button className="btn btn-ghost" onClick={onRefresh} disabled={isBusy || isUpdating}>
                 <RefreshCw size={16} /> Actualizar
               </button>
