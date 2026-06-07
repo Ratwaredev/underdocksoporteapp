@@ -120,6 +120,11 @@ for update
 using (public.is_admin())
 with check (public.is_admin());
 
+create policy "devices admin delete"
+on public.devices
+for delete
+using (public.is_admin());
+
 create policy "devices admin insert"
 on public.devices
 for insert

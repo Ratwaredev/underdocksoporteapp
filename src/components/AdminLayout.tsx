@@ -1,7 +1,6 @@
 import { RefreshCw, Search, Shield, LogOut } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { CustomTitlebar } from './CustomTitlebar';
-import { UpdateNotice } from './UpdateNotice';
 import type { AppSession, UpdateResult } from '../lib/domain';
 
 type AdminPage = 'devices' | 'tickets' | 'sessions' | 'diagnostics' | 'settings';
@@ -76,13 +75,6 @@ export function AdminLayout({
         </aside>
 
         <section className="admin-main">
-          <UpdateNotice
-            updateResult={updateResult}
-            isUpdating={isUpdating}
-            updateProgress={updateProgress}
-            onInstallUpdate={onInstallUpdate}
-          />
-
           <header className="panel admin-header">
             <div className="admin-header__intro">
               <p className="eyebrow">Panel</p>

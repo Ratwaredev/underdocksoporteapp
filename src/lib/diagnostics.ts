@@ -6,6 +6,12 @@ export type ThermalZoneReading = {
   source: string;
 };
 
+export type StorageTemperatureReading = {
+  name: string;
+  temperatureC: number | null;
+  source: string;
+};
+
 export type DiagnosticReport = {
   generatedAt: string;
   computerName: string;
@@ -22,6 +28,7 @@ export type DiagnosticReport = {
   maxTemperatureC: number | null;
   temperatureNote: string;
   thermalZones: ThermalZoneReading[];
+  storageTemperatures: StorageTemperatureReading[];
   recommendations: string[];
 };
 
@@ -56,6 +63,13 @@ export async function runQuickDiagnostic(): Promise<DiagnosticReport> {
         source: 'root\\wmi:MSAcpi_ThermalZoneTemperature'
       }
     ],
+    storageTemperatures: [
+      {
+        name: 'NVMe SSD',
+        temperatureC: 41.0,
+        source: 'Get-PhysicalDisk:Temperature'
+      }
+    ],
     recommendations: [
       'Revisar programas de inicio: hay mas de 12 entradas cargando con Windows.',
       'Espacio en disco aceptable, pero conviene limpiar temporales si baja de 15%.',
@@ -64,4 +78,3 @@ export async function runQuickDiagnostic(): Promise<DiagnosticReport> {
     ]
   };
 }
-

@@ -24,12 +24,21 @@ struct DiagnosticReport {
     max_temperature_c: Option<f64>,
     temperature_note: String,
     thermal_zones: Vec<ThermalZoneReading>,
+    storage_temperatures: Vec<StorageTemperatureReading>,
     recommendations: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ThermalZoneReading {
+    name: String,
+    temperature_c: Option<f64>,
+    source: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StorageTemperatureReading {
     name: String,
     temperature_c: Option<f64>,
     source: String,
@@ -101,6 +110,7 @@ fn run_quick_diagnostic() -> Result<DiagnosticReport, String> {
             max_temperature_c: None,
             temperature_note: "No disponible fuera de Windows.".to_string(),
             thermal_zones: vec![],
+            storage_temperatures: vec![],
             recommendations: vec!["Este MVP prioriza Windows. Preparar comandos por sistema operativo antes de liberar soporte multiplataforma.".to_string()],
         })
     }
@@ -312,6 +322,7 @@ $defender = Get-MpComputerStatus
 $pending = Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
 $defenderStatus = if ($defender.AMServiceEnabled -eq $true) { 'Activo' } elseif ($null -eq $defender) { 'No detectado' } else { 'Revisar' }
 $thermalZones = @()
+$storageTemperatures = @()
 
 try {
   $thermalZones = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature | ForEach-Object {
@@ -330,9 +341,32 @@ try {
   $thermalZones = @()
 }
 
+$storageTemperatures = @(
+  Get-PhysicalDisk | ForEach-Object {
+    $tempC = $null
+    if ($null -ne $_.Temperature) {
+      $tempC = [Math]::Round([double]$_.Temperature, 1)
+    }
+
+    [PSCustomObject]@{
+      name = $_.FriendlyName
+      temperatureC = $tempC
+      source = 'Get-PhysicalDisk:Temperature'
+    }
+  }
+) | Where-Object { $_.name }
+
 $validTemps = $thermalZones | Where-Object { $null -ne $_.temperatureC }
-$maxTemperatureC = if ($validTemps.Count -gt 0) { [Math]::Round((($validTemps | Measure-Object temperatureC -Maximum).Maximum), 1) } else { $null }
-$temperatureNote = if ($validTemps.Count -gt 0) {
+$storageTemps = $storageTemperatures | Where-Object { $null -ne $_.temperatureC }
+$allTemps = @()
+if ($validTemps.Count -gt 0) { $allTemps += $validTemps }
+if ($storageTemps.Count -gt 0) { $allTemps += $storageTemps }
+$maxTemperatureC = if ($allTemps.Count -gt 0) { [Math]::Round((($allTemps | Measure-Object temperatureC -Maximum).Maximum), 1) } else { $null }
+$temperatureNote = if ($storageTemps.Count -gt 0 -and $validTemps.Count -gt 0) {
+  'Lectura combinada: ACPI para la zona térmica del equipo y sensores de almacenamiento cuando Windows los expone.'
+} elseif ($storageTemps.Count -gt 0) {
+  'Lectura de temperatura de almacenamiento disponible. No siempre representa CPU o GPU.'
+} elseif ($validTemps.Count -gt 0) {
   'Lectura ACPI disponible. Puede reflejar la zona térmica del equipo, no siempre el sensor exacto del CPU.'
 } else {
   'Windows no expuso zonas térmicas ACPI en este equipo. Para temperatura exacta de CPU/GPU usa una herramienta de sensores dedicada.'
@@ -354,6 +388,7 @@ $temperatureNote = if ($validTemps.Count -gt 0) {
   maxTemperatureC = $maxTemperatureC
   temperatureNote = $temperatureNote
   thermalZones = @($thermalZones)
+  storageTemperatures = @($storageTemperatures)
   recommendations = @()
 } | ConvertTo-Json -Compress -Depth 4
 "#;
@@ -385,8 +420,31 @@ try {
 }
 
 $validTemps = $thermalZones | Where-Object { $null -ne $_.temperatureC }
-$maxTemperatureC = if ($validTemps.Count -gt 0) { [Math]::Round((($validTemps | Measure-Object temperatureC -Maximum).Maximum), 1) } else { $null }
-$temperatureNote = if ($validTemps.Count -gt 0) {
+$storageTemperatures = @(
+  Get-PhysicalDisk | ForEach-Object {
+    $tempC = $null
+    if ($null -ne $_.Temperature) {
+      $tempC = [Math]::Round([double]$_.Temperature, 1)
+    }
+
+    [PSCustomObject]@{
+      name = $_.FriendlyName
+      temperatureC = $tempC
+      source = 'Get-PhysicalDisk:Temperature'
+    }
+  }
+) | Where-Object { $_.name }
+
+$storageTemps = $storageTemperatures | Where-Object { $null -ne $_.temperatureC }
+$allTemps = @()
+if ($validTemps.Count -gt 0) { $allTemps += $validTemps }
+if ($storageTemps.Count -gt 0) { $allTemps += $storageTemps }
+$maxTemperatureC = if ($allTemps.Count -gt 0) { [Math]::Round((($allTemps | Measure-Object temperatureC -Maximum).Maximum), 1) } else { $null }
+$temperatureNote = if ($storageTemps.Count -gt 0 -and $validTemps.Count -gt 0) {
+  'Lectura combinada: ACPI para la zona térmica del equipo y sensores de almacenamiento cuando Windows los expone.'
+} elseif ($storageTemps.Count -gt 0) {
+  'Lectura de temperatura de almacenamiento disponible. No siempre representa CPU o GPU.'
+} elseif ($validTemps.Count -gt 0) {
   'Lectura ACPI disponible. Puede reflejar la zona térmica del equipo, no siempre el sensor exacto del CPU.'
 } else {
   'Windows no expuso zonas térmicas ACPI en este equipo. Para temperatura exacta de CPU/GPU usa una herramienta de sensores dedicada.'
@@ -397,6 +455,7 @@ $temperatureNote = if ($validTemps.Count -gt 0) {
   maxTemperatureC = $maxTemperatureC
   temperatureNote = $temperatureNote
   thermalZones = @($thermalZones)
+  storageTemperatures = @($storageTemperatures)
 } | ConvertTo-Json -Compress -Depth 4
 "#;
 

@@ -1,6 +1,5 @@
 import {
   CheckCircle2,
-  Globe2,
   RefreshCw,
   ShieldCheck,
   TerminalSquare,
@@ -15,7 +14,6 @@ import type {
   UpdateResult
 } from '../lib/domain';
 import { CustomTitlebar } from './CustomTitlebar';
-import { UpdateNotice } from './UpdateNotice';
 import type { ReactNode, RefObject } from 'react';
 
 type SectionId = 'remote' | 'ticket' | 'quick' | 'advanced' | 'cleaner';
@@ -145,32 +143,23 @@ export function ClientHome({
       <section className="client-workspace">
         <section className="panel client-summary">
           <div className="client-summary__top">
-            <div>
+            <div className="client-summary__identity">
               <p className="eyebrow">Salud de la PC</p>
               <h2>{clientDashboard?.device.displayName ?? session.displayName ?? 'Equipo activo'}</h2>
+              <span className="subtle">{clientDashboard?.device.os ?? 'Windows - Win32'} · {session.orgName ?? 'Cliente'}</span>
             </div>
-            <span className="pill">{session.orgName ?? 'Cliente'}</span>
-          </div>
-
-          <div className="summary-strip">
-            {quickChecks.map((item) => (
-              <InfoMetric key={item.id} label={item.label} value={item.value} tone={item.tone} compact />
-            ))}
-          </div>
-
-          <div className="status-band status-band--compact">
-            <span>
-              <ShieldCheck size={14} /> Ultima revision: {clientDashboard?.diagnostics[0]?.generatedAt ?? 'Sin revision'}
-            </span>
+            <div className="summary-strip">
+              {quickChecks.map((item) => (
+                <InfoMetric key={item.id} label={item.label} value={item.value} tone={item.tone} compact />
+              ))}
+            </div>
+            <div className="status-band status-band--compact">
+              <span>
+                <ShieldCheck size={14} /> Ultima revision: {clientDashboard?.diagnostics[0]?.generatedAt ?? 'Sin revision'}
+              </span>
+            </div>
           </div>
         </section>
-
-        <UpdateNotice
-          updateResult={updateResult}
-          isUpdating={isUpdating}
-          updateProgress={updateProgress}
-          onInstallUpdate={onInstallUpdate}
-        />
 
         <section className="panel client-actions">
           <div className="stack-panel__head">
@@ -181,7 +170,7 @@ export function ClientHome({
             <span className="subtle">{showTicketForm ? 'Ticket' : 'Principal'}</span>
           </div>
 
-          <div className="action-grid">
+          <div className="action-grid action-grid--rail">
             <ActionCard
               active={activeSection === 'remote'}
               icon={<Wifi size={20} />}
@@ -214,7 +203,7 @@ export function ClientHome({
             />
             <ActionCard
               active={activeSection === 'advanced'}
-              icon={<Globe2 size={20} />}
+              icon={<CheckCircle2 size={20} />}
               title="Diagnostico avanzado"
               description="Informe largo."
               onClick={() => {
@@ -310,11 +299,6 @@ export function ClientHome({
                 {quickChecks.map((item) => (
                   <StatusChip key={item.id} label={item.label} value={item.value} tone={item.tone} />
                 ))}
-              </div>
-              <div className="button-row">
-                <button className="btn btn-primary" onClick={onRunQuickDiagnostic} disabled={isBusy}>
-                  Ejecutar diagnostico rapido
-                </button>
               </div>
             </div>
           )}

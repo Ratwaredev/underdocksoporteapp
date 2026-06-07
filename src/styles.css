@@ -33,6 +33,7 @@ body,
 #root {
   margin: 0;
   min-height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -54,9 +55,10 @@ button {
 
 .page-shell {
   position: relative;
-  min-height: 100vh;
+  height: 100vh;
   padding: 18px;
   isolation: isolate;
+  overflow: hidden;
 }
 
 .page-shell--centered {
@@ -65,7 +67,7 @@ button {
 }
 
 .page-shell--admin {
-  padding-bottom: 20px;
+  padding-bottom: 18px;
 }
 
 .shell-backdrop {
@@ -89,10 +91,12 @@ button {
 }
 
 .panel {
-  border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(19, 22, 28, 0.96), rgba(12, 15, 19, 0.9));
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(12px);
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: blur(6px);
 }
 
 .titlebar {
@@ -377,11 +381,13 @@ button {
 .admin-workspace {
   display: grid;
   gap: 16px;
-  margin-top: 16px;
+  margin-top: 12px;
+  min-height: 0;
 }
 
 .client-workspace {
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  align-items: start;
 }
 
 .client-summary,
@@ -419,7 +425,7 @@ button {
 .client-detail,
 .stack-panel,
 .pair-panel {
-  padding: 18px;
+  padding: 14px 16px;
 }
 
 .client-detail {
@@ -433,6 +439,15 @@ button {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.client-summary__top {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.client-summary__identity {
+  min-width: 240px;
 }
 
 .stack-panel__head,
@@ -484,17 +499,19 @@ button {
 
 .summary-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
+  width: 100%;
 }
 
 .info-metric,
 .status-chip,
 .info-card {
-  padding: 11px 12px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.02);
+  padding: 10px 0 10px 12px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .info-metric--compact {
@@ -547,10 +564,10 @@ button {
   justify-content: space-between;
   gap: 12px;
   margin-top: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.02);
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .status-band--compact {
@@ -572,12 +589,17 @@ button {
   gap: 10px;
 }
 
+.action-grid--rail {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .action-card {
   text-align: left;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.02);
-  padding: 12px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 0 10px 0;
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr) auto;
   gap: 10px;
@@ -587,15 +609,15 @@ button {
 }
 
 .action-card.is-active {
-  border-color: rgba(216, 178, 76, 0.45);
-  box-shadow: inset 0 0 0 1px rgba(216, 178, 76, 0.1);
+  border-top-color: rgba(216, 178, 76, 0.6);
 }
 
 .action-card__icon {
   width: 38px;
   height: 38px;
-  border-radius: 12px;
-  border: 1px solid rgba(216, 178, 76, 0.18);
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(216, 178, 76, 0.18);
   display: grid;
   place-items: center;
   color: var(--accent-strong);
@@ -648,10 +670,11 @@ button {
 }
 
 .detail-meta > div {
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.02);
+  padding: 10px 0 10px 12px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .detail-meta strong {
@@ -675,10 +698,11 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.02);
+  padding: 10px 0 10px 12px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .check-option input {
@@ -712,6 +736,7 @@ button {
   gap: 16px;
   margin-top: 16px;
   align-items: start;
+  min-height: 0;
 }
 
 .admin-sidebar {
@@ -765,14 +790,17 @@ button {
 .admin-main {
   display: grid;
   gap: 16px;
+  min-height: 0;
 }
 
 .admin-header {
-  padding: 14px;
+  padding: 12px 0 12px;
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(0, 1.2fr) auto auto;
   gap: 12px;
   align-items: center;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .admin-header__intro strong {
@@ -849,10 +877,11 @@ button {
 .device-row {
   display: grid;
   gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.02);
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .row-item strong,
@@ -912,10 +941,11 @@ button {
 .pair-code-card {
   display: grid;
   gap: 10px;
-  padding: 16px;
-  border: 1px solid var(--line);
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(216, 178, 76, 0.08), rgba(255, 255, 255, 0.02));
+  background: transparent;
 }
 
 .pair-code-meta {
@@ -941,9 +971,9 @@ button {
 .subtle-card {
   display: grid;
   gap: 10px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.02);
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
 }
 
 .settings-grid {
@@ -1004,7 +1034,7 @@ button {
 
 @media (max-width: 860px) {
   .page-shell {
-    padding: 12px;
+    padding: 10px;
   }
 
   .titlebar,
@@ -1039,7 +1069,7 @@ button {
   .stack-panel,
   .pair-panel,
   .auth-card {
-    padding: 18px;
+    padding: 12px 0;
   }
 
   .version-footer {

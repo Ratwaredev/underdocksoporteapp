@@ -25,7 +25,6 @@ import { AdminLogin } from './components/AdminLogin';
 import { ClientActivation } from './components/ClientActivation';
 import { ClientHome } from './components/ClientHome';
 import { PasswordRecovery } from './components/PasswordRecovery';
-import { UpdateNotice } from './components/UpdateNotice';
 import { appendAppError, clearAppErrors, listAppErrors } from './lib/errorLogs';
 
 type Toast = { message: string; tone?: 'neutral' | 'ok' | 'warn' | 'danger' } | null;
@@ -235,7 +234,7 @@ function App() {
 
   if (route.kind === 'recovery') {
     return (
-      <ShellFrame updateResult={updateResult} isUpdating={isUpdating} updateProgress={updateProgress} onInstallUpdate={handleInstallUpdate}>
+      <ShellFrame>
         <PasswordRecovery
           recovery={route.recovery}
           onCancel={() => {
@@ -251,7 +250,7 @@ function App() {
   }
 
   return (
-    <ShellFrame updateResult={updateResult} isUpdating={isUpdating} updateProgress={updateProgress} onInstallUpdate={handleInstallUpdate}>
+    <ShellFrame>
       {route.kind === 'admin' ? <AdminApp initialEmail={route.email} onGoAdmin={openAdmin} onOpenClientPreview={openClientPreview} /> : <ClientApp onGoAdmin={openAdmin} canReturnToAdmin={Boolean(window.localStorage.getItem(STORAGE_KEYS.adminSession))} />}
     </ShellFrame>
   );
@@ -259,23 +258,10 @@ function App() {
 
 function ShellFrame({
   children,
-  updateResult,
-  isUpdating,
-  updateProgress,
-  onInstallUpdate
 }: {
   children: React.ReactNode;
-  updateResult: UpdateResult | null;
-  isUpdating: boolean;
-  updateProgress: string;
-  onInstallUpdate: () => void;
 }) {
-  return (
-    <>
-      <UpdateNotice updateResult={updateResult} isUpdating={isUpdating} updateProgress={updateProgress} onInstallUpdate={onInstallUpdate} />
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }
 
 function ClientApp({ onGoAdmin, canReturnToAdmin }: { onGoAdmin: () => void; canReturnToAdmin: boolean }) {
