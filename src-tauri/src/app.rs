@@ -3,6 +3,8 @@ use chrono::Utc;
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, process::Command};
+use tauri_plugin_updater::UpdaterExt;
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,12 +24,21 @@ struct DiagnosticReport {
     max_temperature_c: Option<f64>,
     temperature_note: String,
     thermal_zones: Vec<ThermalZoneReading>,
+    storage_temperatures: Vec<StorageTemperatureReading>,
     recommendations: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ThermalZoneReading {
+    name: String,
+    temperature_c: Option<f64>,
+    source: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StorageTemperatureReading {
     name: String,
     temperature_c: Option<f64>,
     source: String,
@@ -57,6 +68,16 @@ struct AgentActionResult {
     ok: bool,
     message: String,
     details: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteUpdateResult {
+    status: String,
+    current_version: String,
+    next_version: Option<String>,
+    notes: String,
+    download_url: Option<String>,
 }
 
 #[tauri::command]
@@ -89,6 +110,7 @@ fn run_quick_diagnostic() -> Result<DiagnosticReport, String> {
             max_temperature_c: None,
             temperature_note: "No disponible fuera de Windows.".to_string(),
             thermal_zones: vec![],
+            storage_temperatures: vec![],
             recommendations: vec!["Este MVP prioriza Windows. Preparar comandos por sistema operativo antes de liberar soporte multiplataforma.".to_string()],
         })
     }
@@ -145,6 +167,25 @@ fn agent_status() -> Result<AgentStatus, String> {
 }
 
 #[tauri::command]
+fn open_admin_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("admin") {
+        window.show().map_err(|err| format!("No se pudo mostrar el panel admin: {err}"))?;
+        window.set_focus().map_err(|err| format!("No se pudo enfocar el panel admin: {err}"))?;
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(&app, "admin", WebviewUrl::App("index.html?view=admin".into()))
+        .title("UnderDock Admin")
+        .inner_size(1280.0, 860.0)
+        .resizable(true)
+        .decorations(true)
+        .build()
+        .map_err(|err| format!("No se pudo abrir el panel admin: {err}"))?;
+
+    Ok(())
+}
+
+#[tauri::command]
 fn run_agent_action(action_id: String) -> Result<AgentActionResult, String> {
     match action_id.as_str() {
         "temp_scan" => scan_temp_files(),
@@ -185,6 +226,90 @@ fn open_remote_tool() -> Result<String, String> {
     }
 }
 
+#[tauri::command]
+async fn check_remote_update(app: tauri::AppHandle) -> Result<RemoteUpdateResult, String> {
+    let updater = app
+        .updater()
+        .map_err(|err| format!("No se pudo preparar el updater nativo: {err}"))?;
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+
+    match updater
+        .check()
+        .await
+        .map_err(|err| format!("No se pudo consultar el feed de actualizaciones: {err}"))?
+    {
+        Some(update) => Ok(RemoteUpdateResult {
+            status: "available".to_string(),
+            current_version,
+            next_version: Some(update.version.clone()),
+            notes: update
+                .body
+                .clone()
+                .unwrap_or_else(|| "Hay una actualización disponible.".to_string()),
+            download_url: Some(update.download_url.to_string()),
+        }),
+        None => Ok(RemoteUpdateResult {
+            status: "current".to_string(),
+            current_version,
+            next_version: None,
+            notes: "La app está actualizada.".to_string(),
+            download_url: None,
+        }),
+    }
+}
+
+#[tauri::command]
+async fn install_remote_update(app: tauri::AppHandle) -> Result<RemoteUpdateResult, String> {
+    let updater = app
+        .updater()
+        .map_err(|err| format!("No se pudo preparar el updater nativo: {err}"))?;
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+
+    match updater
+        .check()
+        .await
+        .map_err(|err| format!("No se pudo consultar el feed de actualizaciones: {err}"))?
+    {
+        Some(update) => {
+            update
+                .download_and_install(
+                    |chunk_len, total| {
+                        let downloaded_mb = chunk_len as f64 / (1024.0 * 1024.0);
+                        let total_mb = total.map(|value| value as f64 / (1024.0 * 1024.0));
+                        match total_mb {
+                            Some(total_mb) => {
+                                println!("Descargando actualización: {:.1} / {:.1} MB", downloaded_mb, total_mb);
+                            }
+                            None => {
+                                println!("Descargando actualización: {:.1} MB", downloaded_mb);
+                            }
+                        }
+                    },
+                    || {
+                        println!("Descarga completada, aplicando actualización...");
+                    },
+                )
+                .await
+                .map_err(|err| format!("No se pudo instalar la actualización: {err}"))?;
+
+            Ok(RemoteUpdateResult {
+                status: "available".to_string(),
+                current_version,
+                next_version: Some(update.version.clone()),
+                notes: "Actualización aplicada. La app se reiniciará.".to_string(),
+                download_url: Some(update.download_url.to_string()),
+            })
+        }
+        None => Ok(RemoteUpdateResult {
+            status: "current".to_string(),
+            current_version,
+            next_version: None,
+            notes: "La app ya estaba actualizada.".to_string(),
+            download_url: None,
+        }),
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn run_windows_diagnostic() -> Result<String, String> {
     let script = r#"
@@ -197,6 +322,7 @@ $defender = Get-MpComputerStatus
 $pending = Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
 $defenderStatus = if ($defender.AMServiceEnabled -eq $true) { 'Activo' } elseif ($null -eq $defender) { 'No detectado' } else { 'Revisar' }
 $thermalZones = @()
+$storageTemperatures = @()
 
 try {
   $thermalZones = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature | ForEach-Object {
@@ -215,9 +341,32 @@ try {
   $thermalZones = @()
 }
 
+$storageTemperatures = @(
+  Get-PhysicalDisk | ForEach-Object {
+    $tempC = $null
+    if ($null -ne $_.Temperature) {
+      $tempC = [Math]::Round([double]$_.Temperature, 1)
+    }
+
+    [PSCustomObject]@{
+      name = $_.FriendlyName
+      temperatureC = $tempC
+      source = 'Get-PhysicalDisk:Temperature'
+    }
+  }
+) | Where-Object { $_.name }
+
 $validTemps = $thermalZones | Where-Object { $null -ne $_.temperatureC }
-$maxTemperatureC = if ($validTemps.Count -gt 0) { [Math]::Round((($validTemps | Measure-Object temperatureC -Maximum).Maximum), 1) } else { $null }
-$temperatureNote = if ($validTemps.Count -gt 0) {
+$storageTemps = $storageTemperatures | Where-Object { $null -ne $_.temperatureC }
+$allTemps = @()
+if ($validTemps.Count -gt 0) { $allTemps += $validTemps }
+if ($storageTemps.Count -gt 0) { $allTemps += $storageTemps }
+$maxTemperatureC = if ($allTemps.Count -gt 0) { [Math]::Round((($allTemps | Measure-Object temperatureC -Maximum).Maximum), 1) } else { $null }
+$temperatureNote = if ($storageTemps.Count -gt 0 -and $validTemps.Count -gt 0) {
+  'Lectura combinada: ACPI para la zona térmica del equipo y sensores de almacenamiento cuando Windows los expone.'
+} elseif ($storageTemps.Count -gt 0) {
+  'Lectura de temperatura de almacenamiento disponible. No siempre representa CPU o GPU.'
+} elseif ($validTemps.Count -gt 0) {
   'Lectura ACPI disponible. Puede reflejar la zona térmica del equipo, no siempre el sensor exacto del CPU.'
 } else {
   'Windows no expuso zonas térmicas ACPI en este equipo. Para temperatura exacta de CPU/GPU usa una herramienta de sensores dedicada.'
@@ -239,6 +388,7 @@ $temperatureNote = if ($validTemps.Count -gt 0) {
   maxTemperatureC = $maxTemperatureC
   temperatureNote = $temperatureNote
   thermalZones = @($thermalZones)
+  storageTemperatures = @($storageTemperatures)
   recommendations = @()
 } | ConvertTo-Json -Compress -Depth 4
 "#;
@@ -270,8 +420,31 @@ try {
 }
 
 $validTemps = $thermalZones | Where-Object { $null -ne $_.temperatureC }
-$maxTemperatureC = if ($validTemps.Count -gt 0) { [Math]::Round((($validTemps | Measure-Object temperatureC -Maximum).Maximum), 1) } else { $null }
-$temperatureNote = if ($validTemps.Count -gt 0) {
+$storageTemperatures = @(
+  Get-PhysicalDisk | ForEach-Object {
+    $tempC = $null
+    if ($null -ne $_.Temperature) {
+      $tempC = [Math]::Round([double]$_.Temperature, 1)
+    }
+
+    [PSCustomObject]@{
+      name = $_.FriendlyName
+      temperatureC = $tempC
+      source = 'Get-PhysicalDisk:Temperature'
+    }
+  }
+) | Where-Object { $_.name }
+
+$storageTemps = $storageTemperatures | Where-Object { $null -ne $_.temperatureC }
+$allTemps = @()
+if ($validTemps.Count -gt 0) { $allTemps += $validTemps }
+if ($storageTemps.Count -gt 0) { $allTemps += $storageTemps }
+$maxTemperatureC = if ($allTemps.Count -gt 0) { [Math]::Round((($allTemps | Measure-Object temperatureC -Maximum).Maximum), 1) } else { $null }
+$temperatureNote = if ($storageTemps.Count -gt 0 -and $validTemps.Count -gt 0) {
+  'Lectura combinada: ACPI para la zona térmica del equipo y sensores de almacenamiento cuando Windows los expone.'
+} elseif ($storageTemps.Count -gt 0) {
+  'Lectura de temperatura de almacenamiento disponible. No siempre representa CPU o GPU.'
+} elseif ($validTemps.Count -gt 0) {
   'Lectura ACPI disponible. Puede reflejar la zona térmica del equipo, no siempre el sensor exacto del CPU.'
 } else {
   'Windows no expuso zonas térmicas ACPI en este equipo. Para temperatura exacta de CPU/GPU usa una herramienta de sensores dedicada.'
@@ -282,6 +455,7 @@ $temperatureNote = if ($validTemps.Count -gt 0) {
   maxTemperatureC = $maxTemperatureC
   temperatureNote = $temperatureNote
   thermalZones = @($thermalZones)
+  storageTemperatures = @($storageTemperatures)
 } | ConvertTo-Json -Compress -Depth 4
 "#;
 
@@ -482,10 +656,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            check_remote_update,
+            install_remote_update,
             run_quick_diagnostic,
             thermal_status,
             create_remote_session,
             agent_status,
+            open_admin_window,
             run_agent_action,
             open_remote_tool
         ])

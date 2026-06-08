@@ -50,7 +50,7 @@ jobs:
           releaseBody: 'Release automatica firmada para Windows.'
           releaseDraft: false
           prerelease: false
-          updaterJsonPreferNsis: true
+          updaterJsonPreferNsis: false
           uploadPlainBinary: true
           uploadUpdaterSignatures: true
           args: ''

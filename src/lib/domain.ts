@@ -112,6 +112,7 @@ export type AdminDashboard = {
   devices: DeviceRecord[];
   tickets: TicketRecord[];
   diagnostics: DiagnosticRecord[];
+  sessions: SessionRecord[];
   releases: ReleaseRecord[];
   pairingCodes: PairingCodeRecord[];
 };
@@ -165,10 +166,11 @@ export type CreateSessionInput = {
   ticketId: string;
 };
 
-export const APP_VERSION = '0.1.7';
+export const APP_VERSION = '0.1.29';
 
 export const STORAGE_KEYS = {
-  session: 'underdock.session.v1',
+  clientSession: 'underdock.session.client.v1',
+  adminSession: 'underdock.session.admin.v1',
   localState: 'underdock.local-state.v1'
 } as const;
 
