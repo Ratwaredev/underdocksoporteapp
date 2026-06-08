@@ -222,6 +222,9 @@ export function ClientHome({
               }}
             />
           </div>
+          <p className="detail-copy detail-copy--muted">
+            Las tarjetas solo activan la seccion. Las acciones reales quedan abajo para evitar clicks accidentales.
+          </p>
         </section>
 
         <section className="panel client-detail" ref={detailRef}>

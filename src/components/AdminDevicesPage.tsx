@@ -31,7 +31,12 @@ export function AdminDevicesPage({
             <p className="eyebrow">Equipos</p>
             <h2>Lista de equipos</h2>
           </div>
-          <span className="subtle">{filteredDevices.length} activos</span>
+          <div className="header-actions">
+            <span className="subtle">{filteredDevices.length} activos</span>
+            <button className="btn btn-primary btn-mini" onClick={onGeneratePairingCode} disabled={isBusy}>
+              Vincular equipo
+            </button>
+          </div>
         </div>
         <div className="table-like">
           {filteredDevices.length === 0 ? (
@@ -51,9 +56,6 @@ export function AdminDevicesPage({
                   <span><ShieldCheck size={14} /> {device.userName}</span>
                 </div>
                 <div className="button-row">
-                  <button className="btn btn-ghost btn-mini" onClick={onGeneratePairingCode} disabled={isBusy}>
-                    Vincular equipo
-                  </button>
                   <button className="btn btn-ghost btn-mini" onClick={onOpenRemoteTool} disabled={isBusy}>
                     <SquareTerminal size={14} /> Abrir sesion remota
                   </button>

@@ -109,20 +109,24 @@ function writeSession(session: StoredSession) {
   if (typeof window === 'undefined') return;
   if (!session) {
     window.localStorage.removeItem(STORAGE_KEYS.clientSession);
+    window.localStorage.removeItem('underdock.view.v1');
     return;
   }
 
   window.localStorage.setItem(STORAGE_KEYS.clientSession, JSON.stringify(session));
+  window.localStorage.setItem('underdock.view.v1', 'client');
 }
 
 function writeAdminSession(session: StoredSession) {
   if (typeof window === 'undefined') return;
   if (!session) {
     window.localStorage.removeItem(STORAGE_KEYS.adminSession);
+    window.localStorage.removeItem('underdock.view.v1');
     return;
   }
 
   window.localStorage.setItem(STORAGE_KEYS.adminSession, JSON.stringify(session));
+  window.localStorage.setItem('underdock.view.v1', 'admin');
 }
 
 function clearClientSessionIfMatching(deviceId: string) {
@@ -370,7 +374,6 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
       return { session, device };
     },
     async createPreviewClientSession() {
-      requireAdminSession();
       const state = getState();
       const existingDevice = state.devices.find((item) => item.displayName === 'Equipo de prueba' && item.orgName === state.profile.orgName);
       const timestamp = nowIso();
@@ -408,6 +411,10 @@ function createLocalBackend(config: RuntimeConfig): BackendBase {
         displayName: device.displayName,
         orgName: device.orgName
       };
+
+      if (!readAdminSession()?.email) {
+        throw new Error('Necesitas iniciar sesion como admin para abrir la vista de prueba.');
+      }
 
       writeSession(session);
       return { session, device };
