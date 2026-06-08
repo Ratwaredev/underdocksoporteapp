@@ -166,7 +166,7 @@ export type CreateSessionInput = {
   ticketId: string;
 };
 
-export const APP_VERSION = '0.1.27';
+export const APP_VERSION = '0.1.28';
 
 export const STORAGE_KEYS = {
   clientSession: 'underdock.session.client.v1',

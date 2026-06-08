@@ -25,7 +25,7 @@ export async function checkForUpdates(): Promise<UpdateResult> {
   if (!isTauriRuntime()) {
     return {
       status: 'unconfigured',
-      currentVersion: '0.1.27-dev',
+      currentVersion: '0.1.28-dev',
       notes: 'Modo navegador: el updater real funciona dentro del build Tauri.'
     };
   }
@@ -37,7 +37,7 @@ export async function checkForUpdates(): Promise<UpdateResult> {
     const message = error instanceof Error ? error.message : 'Error desconocido.';
     return {
       status: 'error',
-      currentVersion: '0.1.27',
+      currentVersion: '0.1.28',
       notes: `No se pudo comprobar actualizaciones: ${message}`
     };
   }
@@ -47,7 +47,7 @@ export async function installLatestUpdate(onProgress?: (progress: string) => voi
   if (!isTauriRuntime()) {
     return {
       status: 'unconfigured',
-      currentVersion: '0.1.27-dev',
+      currentVersion: '0.1.28-dev',
       notes: 'Modo navegador: el updater real funciona dentro del build Tauri.'
     };
   }
@@ -62,7 +62,7 @@ export async function installLatestUpdate(onProgress?: (progress: string) => voi
     const message = error instanceof Error ? error.message : 'Error desconocido.';
     return {
       status: 'error',
-      currentVersion: '0.1.27',
+      currentVersion: '0.1.28',
       notes: `No se pudo instalar la actualización: ${message}`
     };
   }
